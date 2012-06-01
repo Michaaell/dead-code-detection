@@ -1,0 +1,336 @@
+open Cmt_format
+open Types
+open Typedtree
+open Ident
+
+(* Ident for the program *)
+let ident_prog = ref (Path.Pident (Ident.create ""))
+
+let ident_prog_list = ref []
+
+let cmt_modname = ref []
+
+let ind = ref 0
+
+let add_entry k e m =
+  if Utils.DepMap.mem k m
+  then
+    let old_entry = Utils.DepMap.find k m in
+    Utils.DepMap.add k (Utils.PathSet.add e old_entry) m
+  else
+    Utils.DepMap.add k (Utils.PathSet.singleton e) m
+
+(******************************************************************************)
+(**   Test pour les calculs de graph de dependences sur des petits exemples  **)
+
+(* Calcul de dep *)          
+          
+let rec calc_dep deps_list id = function
+  | Texp_ident (path,loc,val_desc) ->
+      let dep_id = path in
+      if dep_id = id 
+      then deps_list
+      else add_entry id dep_id deps_list
+  | Texp_constant c -> deps_list
+  | Texp_let (rec_flag,list,e) ->
+      let new_dep_list = calc_dep_let deps_list list in
+      calc_dep new_dep_list id e.exp_desc
+  | Texp_function (lbl,l,part) ->
+       let rec aux xs = function
+        | [] -> xs
+        | (p,e1)::ys ->
+            let new_dep = calc_dep xs id e1.exp_desc in
+            aux new_dep ys
+       in (aux deps_list l)
+  | Texp_apply (e,list) ->
+      let calc_params deps_list = function
+        | (_,Some e1,_) ->
+            calc_dep deps_list id e1.exp_desc
+        | (_,None,_) ->
+            deps_list 
+      in 
+      let new_dep = List.fold_left calc_params deps_list list in
+      calc_dep new_dep id e.exp_desc
+  | Texp_construct (path,loc,constr_des,list) ->
+      let dep_id = path in
+      let new_dep_list = add_entry id dep_id deps_list in
+      List.fold_left (fun dep_list x -> 
+        calc_dep dep_list id x.exp_desc) new_dep_list list
+  | Texp_sequence (e1,e2) -> 
+      let new_dep = calc_dep deps_list id e1.exp_desc in
+      calc_dep new_dep id e2.exp_desc
+  | Texp_tuple list ->
+      List.fold_left (fun dep_list e -> 
+        calc_dep dep_list id e.exp_desc) deps_list list
+  | Texp_match (e,l,part) ->
+      let new_dep = calc_dep deps_list id e.exp_desc in
+      let rec aux dep_list = function
+        | [] -> dep_list
+        | (p,e1)::xs -> 
+            let new_dep = dep_in_patexp_case p e1 id dep_list in
+            aux new_dep xs
+      in aux new_dep l
+  | Texp_field (e,path,_,_) ->
+      let new_dep_list = calc_dep deps_list id e.exp_desc in
+      let dep_id = path in
+      add_entry id dep_id new_dep_list
+  | Texp_record (l,e) -> 
+      begin
+        match e with
+          | None -> 
+              List.fold_left (fun dep_list (path,_,_,e) -> 
+                calc_dep dep_list id e.exp_desc) deps_list l
+          | Some e1 ->
+              let new_deps =  
+                List.fold_left (fun dep_list (path,_,_,e) -> 
+                  calc_dep dep_list id e.exp_desc) deps_list l in
+              calc_dep new_deps id e1.exp_desc
+      end
+  | Texp_when (e1,e2) ->
+      let new_dep_list = calc_dep deps_list id e1.exp_desc in
+      calc_dep new_dep_list id e2.exp_desc
+  | Texp_open (_, _, e) -> calc_dep deps_list id e.exp_desc
+  | Texp_pack _ -> deps_list
+  | Texp_newtype (_, e) -> calc_dep deps_list id e.exp_desc
+  | Texp_object (_, _) -> deps_list
+  | Texp_poly (e, _) -> calc_dep deps_list id e.exp_desc
+  | Texp_lazy e -> calc_dep deps_list id e.exp_desc
+  | Texp_assert e -> calc_dep deps_list id e.exp_desc
+  | Texp_letmodule (_, _, _, e) -> calc_dep deps_list id e.exp_desc
+  | Texp_override (_, l) ->  
+      List.fold_left (fun dep_list (_,_,e) -> calc_dep dep_list id e.exp_desc) deps_list l
+  | Texp_setinstvar (_, _, _, e) -> calc_dep deps_list id e.exp_desc
+  | Texp_instvar (_, _, _) -> deps_list 
+  | Texp_new (_, _, _) -> deps_list
+  | Texp_send (e0, _, e1_opt) -> calc_dep deps_list id e0.exp_desc
+  | Texp_constraint (e, _, _) -> calc_dep deps_list id e.exp_desc
+  | Texp_for (_, _, e0, e1, _, e2) -> 
+      let deps1 = calc_dep deps_list id e0.exp_desc in
+      let deps2 = calc_dep deps1 id e1.exp_desc in
+      calc_dep deps2 id e2.exp_desc
+  | Texp_while (e1, e2) -> 
+      let deps1 = calc_dep deps_list id e1.exp_desc in
+      calc_dep deps1 id e2.exp_desc
+  | Texp_ifthenelse (e0, e1, e2_opt) ->
+      begin
+        match e2_opt with
+          | None -> 
+              let deps1 = calc_dep deps_list id e0.exp_desc in
+              calc_dep deps1 id e1.exp_desc
+          | Some e2 ->
+              let deps1 = calc_dep deps_list id e0.exp_desc in
+              let deps2 = calc_dep deps1 id e1.exp_desc in
+              calc_dep deps2 id e2.exp_desc
+      end 
+  | Texp_array l ->  
+      List.fold_left (fun dep_list e -> calc_dep dep_list id e.exp_desc) deps_list l
+  | Texp_setfield (e0, _, _, _, e1) ->
+      let deps1 = calc_dep deps_list id e1.exp_desc in
+      calc_dep deps1 id e1.exp_desc
+  | Texp_variant (_, _) -> deps_list      
+  | Texp_try (e, l) -> calc_dep deps_list id e.exp_desc
+  | Texp_assertfalse -> deps_list
+
+and calc_index_let index l =
+  let rec get_path_from_patexp = function
+    | Tpat_any -> [Path.Pident (Ident.create "any")]
+    | Tpat_var (id,loc) -> [Path.Pident id]
+    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_constant cnst -> failwith "cst TODO"
+    | Tpat_tuple pat_list ->
+        List.flatten (List.map (fun i -> get_path_from_patexp i.pat_desc) pat_list)
+    | Tpat_construct (path,loc,cnstor_desc,exp_list) -> 
+        [Path.Pident (Ident.create "any")]
+    | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
+    | Tpat_record (list,flag) -> failwith "rec TODO"
+    | Tpat_array pat_list -> failwith "array TODO"
+    | Tpat_or (pat1,pat2,row_desc_opt) -> failwith "or TODO"
+    | Tpat_lazy pat -> failwith "lazy TODO"
+  in  
+  List.fold_left 
+    (fun index (x,e) ->
+      let paths = get_path_from_patexp x.pat_desc in
+      List.fold_left (fun acc p ->
+        incr ind;(!ind-1,p)::acc) index paths) index l
+  
+
+and calc_dep_let dep_list =
+  let rec aux dep_list = function
+    | [] -> dep_list
+    | (p,e1)::deps_list -> 
+        let new_dep = dep_in_patexp_def p e1 dep_list in
+        aux new_dep deps_list
+  in aux dep_list
+
+  
+and dep_in_patexp_def p e1 dep_list =
+  let rec pat_aux dep_list = function
+    | Tpat_any ->
+        let id = Path.Pident (Ident.create "any") in
+        calc_dep dep_list id e1.exp_desc
+    | Tpat_var (id,loc) -> calc_dep dep_list (Path.Pident id) e1.exp_desc
+    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_constant cnst -> failwith "cst TODO"
+    | Tpat_tuple pat_list -> 
+        List.fold_left (fun a p ->
+          pat_aux a p.pat_desc) dep_list pat_list
+    | Tpat_construct (path,loc,cnstor_desc,exp_list) -> dep_list
+    | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
+    | Tpat_record (list,flag) -> failwith "rec TODO"
+    | Tpat_array pat_list -> failwith "array TODO"
+    | Tpat_or (pat1,pat2,row_desc_opt) -> failwith "or TODO"
+    | Tpat_lazy pat -> failwith "lazy TODO"
+  in pat_aux dep_list p.pat_desc
+
+and dep_in_patexp_case p e1 id dep_list =
+  let rec pat_aux id dep_list = function
+    | Tpat_any -> dep_list
+    | Tpat_var (id_var,_) -> add_entry (Path.Pident id_var) id dep_list
+    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_constant cnst -> failwith "cst TODO"
+    | Tpat_tuple pat_list -> 
+        List.fold_left (fun a p ->
+          pat_aux id a p.pat_desc) dep_list pat_list
+    | Tpat_construct (path,loc,cnstor_desc,pat_list) -> 
+        List.fold_left (fun l i -> 
+          (pat_aux id dep_list i.pat_desc)) dep_list pat_list
+    | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
+    | Tpat_record (list,flag) -> 
+        let new_dep_list = 
+          List.fold_left (fun dep_list (path,_,_,pat) -> 
+            pat_aux path dep_list pat.pat_desc) 
+            dep_list list in
+        calc_dep new_dep_list id e1.exp_desc
+    | Tpat_array pat_list -> failwith "array TODO"
+    | Tpat_or (pat1,pat2,row_desc_opt) -> failwith "or TODO"
+    | Tpat_lazy pat -> failwith "lazy TODO"
+  in calc_dep (pat_aux id dep_list p.pat_desc) id e1.exp_desc
+
+let calc_struct_item_descr src index ident_prog deps = function
+  | Tstr_eval e -> (index,calc_dep deps ident_prog e.exp_desc)
+  | Tstr_value (recflag,list) -> 
+      (calc_index_let index list,calc_dep_let deps list)
+  | Tstr_type l -> (index,deps)
+  | Tstr_include (_, _) -> failwith "inc todo"
+  | Tstr_class_type _ -> failwith "ct todo"
+  | Tstr_class _ -> failwith "cl todo"
+  | Tstr_open (_, _) -> (index,deps)
+  | Tstr_modtype (_, _, _) -> failwith "modtype todo"
+  | Tstr_recmodule _ -> failwith "recmodule todo"
+  | Tstr_module (id, _, _) ->  incr ind;((!ind-1,Path.Pident id)::index,deps)
+  | Tstr_exn_rebind (_, _, _, _) -> failwith "exnreb todo"
+  | Tstr_exception (_, _, _) -> failwith "exc todo"
+  | Tstr_primitive (_, _, _)   -> failwith "prim todo"
+        
+let calc_structure_items src list =
+  ident_prog := Path.Pident (Ident.create src);
+  ident_prog_list := (src,(!ident_prog))::(!ident_prog_list);
+  List.fold_left (fun (index,dep) x -> 
+    calc_struct_item_descr src index !ident_prog dep x.str_desc) ([],Utils.DepMap.empty) list
+
+let calc_annot src = function
+  | Implementation strct -> calc_structure_items src strct.str_items
+  | _ -> failwith "Can't print that" 
+ 
+let calc filename  =
+  let cmt_inf = Cmt_format.read_cmt filename in
+  ind := 0;
+  cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
+  calc_annot cmt_inf.cmt_modname cmt_inf.cmt_annots
+
+let rec live id acc m = 
+  if (Utils.DepMap.mem id m)
+  then
+    let dep_id = Utils.DepMap.find id m in
+    Utils.PathSet.fold (fun x a ->
+    match x with
+      | Path.Pdot _ -> a
+      | _ -> 
+          if Utils.PathSet.mem x a
+          then a
+          else
+            let new_acc = Utils.PathSet.add x a in
+            (live x new_acc m)
+    ) dep_id acc
+  else acc
+
+let mod_equality p m = match p with
+  | Path.Pident id -> id.name = m
+  | _ -> false
+
+
+(** !!!!!!! + NAME EQ pour etre sur ?! *)
+let rec id_from_cnstr i = function
+  | [] -> failwith ("can't find construction "^string_of_int i)
+  | (x,y)::xs when x = i -> 
+      (* Utils.debug "@[ +%a(%i)+@]@." Printer.print_path y i; *)
+      y
+  | _::xs -> id_from_cnstr i xs
+
+let rec get_from_ident_prog_list id = function
+  | [] -> failwith "no id"
+  | (x,y)::xs when x = id -> y
+  | _::xs -> get_from_ident_prog_list id xs
+
+let rec is_mod p = function
+  | [] -> false
+  | (x1,_)::_ when mod_equality p x1 -> true
+  | _::xs -> is_mod p xs
+      
+let get_name = function
+  | Path.Pident id -> id.name
+  | _ -> failwith "no module name here"
+      
+let rec get_deps_cnst modname = function
+  | [] -> failwith "can't find this mod"
+  | (x,y)::_ when x = modname -> y
+  | _::xs -> get_deps_cnst modname xs
+
+let rec get_mod_id p = function
+  | [] -> failwith "no modname with this id"
+  | (x1,x2)::_ when mod_equality p x1 -> x2
+  | _::xs -> get_mod_id p xs
+
+let rec get_cmt_from_modname mn = function
+  | [] -> failwith "no modname with this id"
+  | (x1,x2)::_ when x2 = mn -> x1
+  | _::xs -> get_cmt_from_modname mn xs
+
+
+let rec update_deps p id1 id2 = function
+  | [] -> failwith "no modname with this id"
+  | (x1,(c,d))::xs when mod_equality p x1 -> (x1,(c,(add_entry id1 id2 d)))::xs
+  | x::xs -> x::(update_deps p id1 id2 xs)
+
+let rec calc_inter_dep_mod syst m = 
+  Utils.DepMap.fold (fun k e a -> 
+    Utils.PathSet.fold (fun x a ->
+    match x with
+      | Path.Pdot (p,s,i) ->
+          if (is_mod p !ident_prog_list && i <> -1)
+          then 
+            let p_cnstr,p_deps = (get_deps_cnst (get_name p) syst) in
+            let id1 = get_mod_id p !ident_prog_list and 
+                id2 = id_from_cnstr i p_cnstr in
+            update_deps p id1 id2 a
+          else a
+      | _ -> a) e a) m syst
+        
+let calc_inter_dep syst li = 
+  List.fold_left (calc_inter_dep_mod) syst li
+
+let calc_live (fn,(c,d)) = 
+  let id = get_from_ident_prog_list fn !ident_prog_list in
+  let used = live id (Utils.PathSet.empty) d in
+  let cmt = get_cmt_from_modname fn !cmt_modname in
+  (cmt,used)
+
+let deps_to_live_id l =
+  List.map calc_live l
+
+
+
+
+
+
+
