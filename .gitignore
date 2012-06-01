@@ -8,3 +8,4 @@
 *.cmxs
 *.cmxa
 *.cmt
+Makefile.config
