@@ -91,9 +91,9 @@ let rec calc_dep deps_list id = function
       calc_dep new_dep_list id e2.exp_desc
   (* | Texp_open (_, _, e) -> calc_dep deps_list id e.exp_desc *)
   | Texp_pack _ -> deps_list
-  | Texp_newtype (_, e) -> calc_dep deps_list id e.exp_desc
+  (* | Texp_newtype (_, e) -> calc_dep deps_list id e.exp_desc *)
   | Texp_object (_, _) -> deps_list
-  | Texp_poly (e, _) -> calc_dep deps_list id e.exp_desc
+  (* | Texp_poly (e, _) -> calc_dep deps_list id e.exp_desc *)
   | Texp_lazy e -> calc_dep deps_list id e.exp_desc
   | Texp_assert e -> calc_dep deps_list id e.exp_desc
   | Texp_letmodule (_, _, _, e) -> calc_dep deps_list id e.exp_desc
