@@ -68,7 +68,7 @@ and print_tt_expr_desc ppf = function
       let aux ppf l = List.iter (fun x -> 
         fprintf ppf "@ %a" print_tt_expr_desc x.exp_desc) l in
       fprintf ppf "[%a]" aux exp_list
-  | Texp_construct (path,loc,cnstr_desc,exp_list) -> 
+  | Texp_construct (path,loc,cnstr_desc,exp_list,_) -> 
       fprintf ppf "Texp_construct(%a)" print_path path
   | Texp_variant (lbl,e_opt) -> fprintf ppf "variant"
   | Texp_record (list,e_opt) -> 
@@ -117,10 +117,10 @@ and print_constant ppf = function
 and print_pattern ppf = function
   | Tpat_any -> fprintf ppf "any"
   | Tpat_var (id,loc) -> fprintf ppf "%a" Ident.print id
-  | Tpat_alias (p,kind) -> fprintf ppf "alias"
+  | Tpat_alias (p,kind,_) -> fprintf ppf "alias"
   | Tpat_constant cnst -> fprintf ppf "cnst"
   | Tpat_tuple pat_list -> fprintf ppf "tuple"
-  | Tpat_construct (path,loc,cnstor_desc,pat_list) -> fprintf ppf "cnstr"
+  | Tpat_construct (path,loc,cnstor_desc,pat_list,_) -> fprintf ppf "cnstr"
   | Tpat_variant (lbl,pat_option,row_desc) -> fprintf ppf "variant"
   | Tpat_record (list,flag) -> 
       List.iter (fun (path,_,_,pat) -> 

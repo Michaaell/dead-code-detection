@@ -3,15 +3,37 @@ open Types
 open Typedtree
 open Ident
 
+let mod_list = ref []
+
+let rec is_id_in_mod_list id = function
+  | [] -> false
+  | x::_ when x = id.name -> true
+  | _::xs -> is_id_in_mod_list id xs
+
+let is_in_mod_list = function
+  | Path.Pident id -> is_id_in_mod_list id !mod_list
+  | _ -> false
+
+
 (** Lors de l'appel d'une fonction, si elle vient d'un module qu'on 
-    n'analyse pas alors on dit qu'elle fait des effets de bords !
+    n'analyse pas alors on dit qu'elle fait des effets de bords ! 
 *)
 
 let side_effect_fun = ref Utils.PathSet.empty
 
+
+let path_make_side_effect' = function
+  | Path.Pdot(_,_,26) -> true (* IF PERVASIVE *)
+  | Path.Pdot(_,_,29) -> true (* IF PERVASIVE *)
+  | _ -> false
+
 let path_make_side_effect = function
-  | Path.Pdot(_,_,26) -> true
-  | _ as p -> Utils.PathSet.mem p !side_effect_fun
+  | Path.Pdot(_,_,26) -> true (* IF PERVASIVE *)
+  | Path.Pdot(_,_,29) -> true (* IF PERVASIVE *)
+  | Path.Pdot(modname,var,st) ->
+      if (is_in_mod_list modname) then false
+      else true
+  | _ as p -> Utils.PathSet.mem p !side_effect_fun 
 
 (* let rec side_effect_in_list = function *)
 (*   | [] -> false *)
@@ -41,34 +63,39 @@ let path_make_side_effect = function
 (*   | _ -> true *)
       
 
-let rec exp_side_fun_body = function
-  | Texp_ident _ | Texp_constant _ -> false
-  | Texp_let (_,list,e) as exp ->
-      List.fold_left (fun b (p,e) ->
-        b || exp_side_fun_body e.exp_desc) false list
-  | Texp_function (lbl,list,part) ->
-      List.fold_left (fun b (p,e) -> 
-        b || exp_side_fun_body e.exp_desc ) false list
-  | Texp_apply (e,list) ->
-      begin 
-        match e.exp_desc with
-          | Texp_ident (p,loc,_) -> 
-              if path_make_side_effect p then true
-              else false
-          | _ -> false
-      end
-  | _ -> false
+let rec exp_side_fun_body list =
+  let aux = function
+    | Texp_ident _ | Texp_constant _ -> false
+    | Texp_apply (e,list) ->
+        begin
+          match e.exp_desc with
+            | Texp_ident (p,loc,_) ->
+                if path_make_side_effect p then true
+                else false
+            | _ -> false
+        end  
+    | _ -> false
+  in  
+  List.fold_left (fun b (p,e) -> b || aux e.exp_desc) false list
 
+let rec exp_side_let_body = function
+  | Texp_ident _ | Texp_constant _ -> false
+  | Texp_let (_,list,e) ->
+      List.fold_left (fun b (p,e) ->
+        b || exp_side_let_body e.exp_desc) false list
+  | Texp_function (lbl,list,part) ->
+      exp_side_fun_body list
+  | _ -> false
 
           
 
 and get_path_from_pat p = match p.pat_desc with 
     | Tpat_any -> Path.Pident (Ident.create "any")
     | Tpat_var (id,loc) -> Path.Pident id
-    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_alias (p,kind,_) -> failwith "as TODO"
     | Tpat_constant cnst -> failwith "cst TODO"
     | Tpat_tuple pat_list -> get_path_from_pat (List.hd pat_list)
-    | Tpat_construct (path,loc,cnstor_desc,exp_list) -> path
+    | Tpat_construct (path,loc,cnstor_desc,exp_list,_) -> path
     | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
     | Tpat_record (list,flag) -> failwith "rec TODO"
     | Tpat_array pat_list -> failwith "array TODO"
@@ -85,19 +112,9 @@ and exp_side = function
   | Texp_let (rec_flag,list,e) -> 
       List.iter (fun (p,e) ->
         let path = get_path_from_pat p in
-        let flag = exp_side_fun_body e.exp_desc in
+        let flag = exp_side_let_body e.exp_desc in
         if (flag)
-        then
-          begin
-            side_effect_fun := Utils.PathSet.add path !side_effect_fun;
-            Utils.debug 
-              "@[%a fait des effets de bord@]@." 
-              Printer.print_path path
-          end
-        else
-          Utils.debug
-            "@[%a ne fait pas des effets de bord@]@."
-            Printer.print_path path) list;
+        then side_effect_fun := Utils.PathSet.add path !side_effect_fun) list;
       exp_side e.exp_desc
   (* | Texp_function (lbl,l,part) -> *)
   (*     List.iter (fun (p,e) -> exp_side e.exp_desc) l *)
@@ -112,7 +129,12 @@ and exp_side = function
 
 let side_struct_item_descr s = match s.str_desc with 
   | Tstr_eval e -> exp_side e.exp_desc
-  | Tstr_value (recflag,list) -> failwith "value todo"
+  | Tstr_value (recflag,list) -> 
+      List.iter (fun (p,e) ->
+        let path = get_path_from_pat p in
+        let flag = exp_side_let_body e.exp_desc in
+        if (flag)
+        then side_effect_fun := Utils.PathSet.add path !side_effect_fun) list;
   | Tstr_type l -> failwith "type"
   | Tstr_include (_, _) -> failwith "inc todo"
   | Tstr_class_type _ -> failwith "ct todo"
@@ -133,16 +155,35 @@ let side_annot = function
   | Implementation strct -> side_structure_items strct.str_items
   | _ -> failwith "Can't print that" 
 
-let main_side filename  =
+let main_side modlist filename =
+  mod_list := modlist;
   let cmt_inf = Cmt_format.read_cmt filename in
-  side_annot cmt_inf.cmt_annots
+  side_annot cmt_inf.cmt_annots;
+  !side_effect_fun
 
 
 
+(** Sur LES DEPS *)
 
+let reverse_dep local_dep = 
+  Utils.DepMap.fold (fun k v acc -> 
+    Utils.PathSet.fold (fun x acc -> Deps.add_entry x k acc) v acc
+  ) local_dep Utils.DepMap.empty
 
+let rec aux rdeps id acc =
+  if Utils.DepMap.mem id rdeps
+  then 
+    let new_acc = Utils.PathSet.add id acc in
+    let path_list = Utils.DepMap.find id rdeps in
+    Utils.PathSet.fold (fun x acc -> aux rdeps x acc) path_list new_acc
+  else Utils.PathSet.add id acc
 
-
-
-
+let id_affect_by_side_effect rdeps =
+  Utils.DepMap.fold (fun k v acc ->
+    if path_make_side_effect' k then
+      Utils.PathSet.fold (fun x acc -> aux rdeps x acc) v acc
+    else
+      acc
+  ) rdeps Utils.PathSet.empty
+  
 

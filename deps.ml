@@ -51,7 +51,7 @@ let rec calc_dep deps_list id = function
       in 
       let new_dep = List.fold_left calc_params deps_list list in
       calc_dep new_dep id e.exp_desc
-  | Texp_construct (path,loc,constr_des,list) ->
+  | Texp_construct (path,loc,constr_des,list,_) ->
       let dep_id = path in
       let new_dep_list = add_entry id dep_id deps_list in
       List.fold_left (fun dep_list x -> 
@@ -89,7 +89,7 @@ let rec calc_dep deps_list id = function
   | Texp_when (e1,e2) ->
       let new_dep_list = calc_dep deps_list id e1.exp_desc in
       calc_dep new_dep_list id e2.exp_desc
-  | Texp_open (_, _, e) -> calc_dep deps_list id e.exp_desc
+  (* | Texp_open (_, _, e) -> calc_dep deps_list id e.exp_desc *)
   | Texp_pack _ -> deps_list
   | Texp_newtype (_, e) -> calc_dep deps_list id e.exp_desc
   | Texp_object (_, _) -> deps_list
@@ -103,7 +103,7 @@ let rec calc_dep deps_list id = function
   | Texp_instvar (_, _, _) -> deps_list 
   | Texp_new (_, _, _) -> deps_list
   | Texp_send (e0, _, e1_opt) -> calc_dep deps_list id e0.exp_desc
-  | Texp_constraint (e, _, _) -> calc_dep deps_list id e.exp_desc
+  (* | Texp_constraint (e, _, _) -> calc_dep deps_list id e.exp_desc *)
   | Texp_for (_, _, e0, e1, _, e2) -> 
       let deps1 = calc_dep deps_list id e0.exp_desc in
       let deps2 = calc_dep deps1 id e1.exp_desc in
@@ -135,11 +135,11 @@ and calc_index_let index l =
   let rec get_path_from_patexp = function
     | Tpat_any -> [Path.Pident (Ident.create "any")]
     | Tpat_var (id,loc) -> [Path.Pident id]
-    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_alias (p,kind,_) -> get_path_from_patexp p.pat_desc
     | Tpat_constant cnst -> failwith "cst TODO"
     | Tpat_tuple pat_list ->
         List.flatten (List.map (fun i -> get_path_from_patexp i.pat_desc) pat_list)
-    | Tpat_construct (path,loc,cnstor_desc,exp_list) -> 
+    | Tpat_construct (path,loc,cnstor_desc,exp_list,_) -> 
         [Path.Pident (Ident.create "any")]
     | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
     | Tpat_record (list,flag) -> failwith "rec TODO"
@@ -169,12 +169,12 @@ and dep_in_patexp_def p e1 dep_list =
         let id = Path.Pident (Ident.create "any") in
         calc_dep dep_list id e1.exp_desc
     | Tpat_var (id,loc) -> calc_dep dep_list (Path.Pident id) e1.exp_desc
-    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_alias (p,kind,_) -> pat_aux dep_list p.pat_desc
     | Tpat_constant cnst -> failwith "cst TODO"
     | Tpat_tuple pat_list -> 
         List.fold_left (fun a p ->
           pat_aux a p.pat_desc) dep_list pat_list
-    | Tpat_construct (path,loc,cnstor_desc,exp_list) -> dep_list
+    | Tpat_construct (path,loc,cnstor_desc,exp_list,_) -> dep_list
     | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
     | Tpat_record (list,flag) -> failwith "rec TODO"
     | Tpat_array pat_list -> failwith "array TODO"
@@ -186,12 +186,12 @@ and dep_in_patexp_case p e1 id dep_list =
   let rec pat_aux id dep_list = function
     | Tpat_any -> dep_list
     | Tpat_var (id_var,_) -> add_entry (Path.Pident id_var) id dep_list
-    | Tpat_alias (p,kind) -> failwith "as TODO"
+    | Tpat_alias (p,kind,_) -> pat_aux id dep_list p.pat_desc
     | Tpat_constant cnst -> failwith "cst TODO"
     | Tpat_tuple pat_list -> 
         List.fold_left (fun a p ->
           pat_aux id a p.pat_desc) dep_list pat_list
-    | Tpat_construct (path,loc,cnstor_desc,pat_list) -> 
+    | Tpat_construct (path,loc,cnstor_desc,pat_list,_) -> 
         List.fold_left (fun l i -> 
           (pat_aux id dep_list i.pat_desc)) dep_list pat_list
     | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
@@ -202,7 +202,7 @@ and dep_in_patexp_case p e1 id dep_list =
             dep_list list in
         calc_dep new_dep_list id e1.exp_desc
     | Tpat_array pat_list -> failwith "array TODO"
-    | Tpat_or (pat1,pat2,row_desc_opt) -> failwith "or TODO"
+    | Tpat_or (pat1,pat2,row_desc_opt) -> pat_aux id dep_list pat1.pat_desc (** TODO *)
     | Tpat_lazy pat -> failwith "lazy TODO"
   in calc_dep (pat_aux id dep_list p.pat_desc) id e1.exp_desc
 
@@ -216,10 +216,10 @@ let calc_struct_item_descr src index ident_prog deps = function
   | Tstr_class _ -> failwith "cl todo"
   | Tstr_open (_, _) -> (index,deps)
   | Tstr_modtype (_, _, _) -> failwith "modtype todo"
-  | Tstr_recmodule _ -> failwith "recmodule todo"
+  | Tstr_recmodule _ -> (index,deps)
   | Tstr_module (id, _, _) ->  incr ind;((!ind-1,Path.Pident id)::index,deps)
   | Tstr_exn_rebind (_, _, _, _) -> failwith "exnreb todo"
-  | Tstr_exception (_, _, _) -> failwith "exc todo"
+  | Tstr_exception (_, _, _) -> (index,deps)
   | Tstr_primitive (_, _, _)   -> failwith "prim todo"
         
 let calc_structure_items src list =
@@ -233,10 +233,12 @@ let calc_annot src = function
   | _ -> failwith "Can't print that" 
  
 let calc filename  =
-  let cmt_inf = Cmt_format.read_cmt filename in
-  ind := 0;
-  cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
-  calc_annot cmt_inf.cmt_modname cmt_inf.cmt_annots
+  try
+    let cmt_inf = Cmt_format.read_cmt filename in
+    ind := 0;
+    cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
+    calc_annot cmt_inf.cmt_modname cmt_inf.cmt_annots
+  with _ -> failwith ("can't calc "^filename)
 
 let rec live id acc m = 
   if (Utils.DepMap.mem id m)
@@ -272,6 +274,11 @@ let rec get_from_ident_prog_list id = function
   | (x,y)::xs when x = id -> y
   | _::xs -> get_from_ident_prog_list id xs
 
+let rec get_fn_from_ident_prog_list p = function
+  | [] -> failwith "no path in ident_prog_list"
+  | (x,y)::xs when y = p -> x
+  | _::xs -> get_fn_from_ident_prog_list p xs
+
 let rec is_mod p = function
   | [] -> false
   | (x1,_)::_ when mod_equality p x1 -> true
@@ -302,33 +309,113 @@ let rec update_deps p id1 id2 = function
   | (x1,(c,d))::xs when mod_equality p x1 -> (x1,(c,(add_entry id1 id2 d)))::xs
   | x::xs -> x::(update_deps p id1 id2 xs)
 
-let rec calc_inter_dep_mod syst m = 
-  Utils.DepMap.fold (fun k e a -> 
-    Utils.PathSet.fold (fun x a ->
-    match x with
-      | Path.Pdot (p,s,i) ->
-          if (is_mod p !ident_prog_list && i <> -1)
-          then 
+
+let rec calc_inter_dep_mod_aux syst mn mn_deps used = function
+  | Path.Pdot (p,_,i) as x-> 
+      begin
+        if (is_mod p !ident_prog_list && i <> -1)
+        then
+          begin
             let p_cnstr,p_deps = (get_deps_cnst (get_name p) syst) in
-            let id1 = get_mod_id p !ident_prog_list and 
-                id2 = id_from_cnstr i p_cnstr in
-            update_deps p id1 id2 a
-          else a
-      | _ -> a) e a) m syst
+            let p_mn = get_mod_id p !ident_prog_list in
+            let id1 = id_from_cnstr i p_cnstr in
+            let new_used = add_entry p_mn id1 used in
+            calc_inter_dep_mod syst p_mn id1 p_deps new_used
+                        (* Utils.debug "%a %i" Printer.print_path p i; *)
+                        (* calc_inter_dep_mod syst x m *)
+          end
+        else
+          let new_used = add_entry mn x used in
+          calc_inter_dep_mod syst mn x mn_deps new_used
+      end
+  | _ as x ->
+      let new_used = add_entry mn x used in
+      calc_inter_dep_mod syst mn x mn_deps new_used
         
-let calc_inter_dep syst li = 
-  List.fold_left (calc_inter_dep_mod) syst li
+and calc_inter_dep_mod syst mn id_cur mn_deps used =
+  if (Utils.DepMap.mem id_cur mn_deps)
+  then
+    begin
+      let dep_id = Utils.DepMap.find id_cur mn_deps in
+      Utils.PathSet.fold (fun x acc ->
+        if Utils.DepMap.mem mn used 
+        then
+          let mn_used = Utils.DepMap.find mn used in
+          if Utils.PathSet.mem x mn_used then acc
+          else calc_inter_dep_mod_aux syst mn mn_deps acc x
+        else calc_inter_dep_mod_aux syst mn mn_deps acc x
+      ) dep_id used
+    end
+  else used
 
-let calc_live (fn,(c,d)) = 
-  let id = get_from_ident_prog_list fn !ident_prog_list in
-  let used = live id (Utils.PathSet.empty) d in
-  let cmt = get_cmt_from_modname fn !cmt_modname in
-  (cmt,used)
 
-let deps_to_live_id l =
-  List.map calc_live l
+(* (\** *\) *)
+(* let rec calc_inter_dep_mod syst m =  *)
+(*   Utils.DepMap.fold  *)
+(*     (fun k e a ->  *)
+(*       Utils.PathSet.fold  *)
+(*         (fun x a -> *)
+(*           match x with *)
+(*             | Path.Pdot (p,s,i) -> *)
+(*                 if (is_mod p !ident_prog_list && i <> -1) *)
+(*                 then  *)
+(*                   let p_cnstr,p_deps = (get_deps_cnst (get_name p) syst) in *)
+(*                   let id1 = get_mod_id p !ident_prog_list and  *)
+(*                       id2 = id_from_cnstr i p_cnstr in *)
+(*                   update_deps p id1 id2 a *)
+(*                 else a *)
+(*             | _ -> a *)
+(*         ) e a *)
+(*     ) m syst *)
+        
+let calc_inter_live syst = 
+  let used = 
+    List.fold_left (fun used (fn,(_,d)) -> 
+      let id = get_from_ident_prog_list fn !ident_prog_list in
+      calc_inter_dep_mod syst id id d used) Utils.DepMap.empty syst in
+  List.map (fun (fn,_) ->
+    let id = get_from_ident_prog_list fn !ident_prog_list in
+    let cmt = get_cmt_from_modname fn !cmt_modname in
+    if Utils.DepMap.mem id used
+    then (cmt,Utils.DepMap.find id used)
+    else (cmt,Utils.PathSet.empty)
+  ) syst
 
+(* let calc_live (fn,(c,d)) =  *)
+(*   let id = get_from_ident_prog_list fn !ident_prog_list in *)
+(*   let used = live id (Utils.PathSet.empty) d in *)
+(*   let cmt = get_cmt_from_modname fn !cmt_modname in *)
+(*   (cmt,used) *)
 
+(* let deps_to_live_id l = *)
+(*   List.map calc_live l *)
+
+(* (\** Fix du bug qui maintient en vie des fonctions d'autre module *\) *)
+
+(* let rec live_deps id acc m =  *)
+(*   if (Utils.DepMap.mem id m) *)
+(*   then *)
+(*     let dep_id = Utils.DepMap.find id m in *)
+(*     Utils.PathSet.fold (fun x a -> *)
+(*     match x with *)
+(*       | Path.Pdot _ -> a *)
+(*       | _ ->  *)
+(*           if Utils.PathSet.mem x a *)
+(*           then a *)
+(*           else *)
+(*             let new_acc = Utils.PathSet.add x a in *)
+(*             (live x new_acc m) *)
+(*     ) dep_id acc *)
+(*   else acc *)
+
+(* let calc_live_deps (fn,(c,d)) =  *)
+(*   let id = get_from_ident_prog_list fn !ident_prog_list in *)
+(*   let used = live_deps id (Utils.DepMap.empty) d in *)
+(*   let cmt = get_cmt_from_modname fn !cmt_modname in *)
+(*   (cmt,used) *)
+
+(* let deps_to_live_deps l = *)
+(*   List.map calc_live_deps l *)
 
 
 

@@ -4,7 +4,7 @@
 
 # Requirements
 
-  * Typerex >= 1.0 (www.typerex.org)
+  * OCaml >= 4.0
 
 # Compile
 

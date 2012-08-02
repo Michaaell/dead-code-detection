@@ -10,7 +10,7 @@ let rec print_warning_id id loc =
     (* Printer.print_warning_path (Warnings.Unused_var id.Ident.name) *)
 
 let rec print_warning_path path loc =
-  Utils.debug "@[%a@] %s is unused@." 
+  Utils.debug "@[%a@] %s is unused@."
     Location.print loc.Asttypes.loc
     (Path.head path).name
     (* Printer.print_warning_path (Warnings.Unused_var (Path.head path).name) *)
@@ -33,7 +33,7 @@ let rec clean_exp idlist = function
         | [] -> []
         | (p,e1)::ys -> ignore(clean_exp idlist e1.exp_desc);aux ys in ignore(aux l);x
   | Texp_apply (e,list) as x -> x
-  | Texp_construct (path,loc,constr_des,list) as x -> x
+  | Texp_construct (path,loc,constr_des,list,_) as x -> x
   | Texp_sequence (e1,e2) ->
       let new_e1 = { e1 with exp_desc = clean_exp idlist e1.exp_desc } and
           new_e2 = { e1 with exp_desc = clean_exp idlist e2.exp_desc } in
