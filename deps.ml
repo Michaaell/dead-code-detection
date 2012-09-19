@@ -436,8 +436,8 @@ and calc_inter_dep_mod syst te mn id_cur mn_deps used =
 let calc_inter_live syst = 
   let used = 
     List.fold_left (fun used (fn,(cnst,te,d)) ->
-      Utils.debug "==\n %a ==\n@." Utils.print_graph_map d;
-      List.iter (fun (_,x) -> Utils.debug "t : %a @." Printer.print_path x) cnst;
+      (* Utils.debug "==\n %a ==\n@." Utils.print_graph_map d; *)
+      (* List.iter (fun (_,x) -> Utils.debug "t : %a @." Printer.print_path x) cnst; *)
       let id = get_from_ident_prog_list fn !ident_prog_list in
       calc_inter_dep_mod syst te id id d used) Utils.DepMap.empty syst in
   List.map (fun (fn,_) ->
