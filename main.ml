@@ -31,8 +31,7 @@ let speclist = [
    ": print the typedtree giving the cmt file");
   ("-elim-project", Arg.String (fun s -> dirname := s; test_flag := true),
    ": detect dead code in source files giving a repositery containing cmt files");
-  (* ("-side", Arg.String (fun s -> cmt_list := parse_arg_list s; side_flag := true), *)
-  (*  ": detects side effect") *)]
+  ]
 
 let _ =
   Arg.parse
@@ -60,21 +59,6 @@ let _ =
         List.iter (fun (fn,s) -> ignore (Clean.soft_clean fn s)) used
       end
     else
-      if !side_flag
-      then
-        begin ()
-          (* let mod_list = List.map (fun x -> Utils.get_modname x) !cmt_list in *)
-          (* let l = List.map (fun x -> (x,Side_effect.main_side mod_list x)) !cmt_list in *)
-          (* Utils.debug "%i" (List.length l) *)
-          (* let syst = *)
-          (*   List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in () *)
-          (* let local_deps = snd (List.split (snd (List.split new_syst))) in *)
-          (* List.iter (fun x -> *)
-          (*   let new_ld = Side_effect.reverse_dep x in *)
-          (*   let used = Side_effect.id_affect_by_side_effect new_ld in *)
-          (*   Utils.PathSet.iter (Utils.debug "%a " Printer.print_path) used) local_deps *)
-        end
-      else
       Printer.dttree ppf fn
 
 
