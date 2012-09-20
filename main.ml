@@ -15,14 +15,17 @@ let side_flag = ref false
 let parse_arg_list = Str.split (Str.regexp "[ \t]+")
 
 let rec iter_dir dirname =
-  let files = Sys.readdir dirname in
-  Array.iter (fun file ->
-    let file = Filename.concat dirname file in
-    if Sys.is_directory file then iter_dir file;
-    if Filename.check_suffix file ".cmt" then cmt_list := file::!cmt_list;
-  ) files
-
-let usage = "usage: " ^ Sys.argv.(0) ^ " [-elim cmt_file] [-print cmt_file] [-elim-project rep]"
+  if dirname = ""
+  then ()
+  else
+    let files = Sys.readdir dirname in
+    Array.iter (fun file ->
+      let file = Filename.concat dirname file in
+      if Sys.is_directory file then iter_dir file;
+      if Filename.check_suffix file ".cmt" then cmt_list := file::!cmt_list;
+    ) files
+      
+let usage = "usage: " ^ Sys.argv.(0) ^ " [cmt1 cmt2 cmt3 ...] [-elim cmt_file] [-print cmt_file] [-elim-project rep]"
  
 let speclist = [
   ("-elim", Arg.String (fun s -> cmt_list := parse_arg_list s;elim_flag := true),
@@ -36,7 +39,15 @@ let speclist = [
 let _ =
   Arg.parse
     speclist
-    (fun x -> raise (Arg.Bad ("Bad argument : " ^ x)))
+    (fun x ->
+      if Filename.check_suffix x ".cmt"
+      then
+        begin
+          cmt_list := x::(!cmt_list);
+          test_flag := true
+        end
+      else
+        raise (Arg.Bad ("Bad argument : " ^ x)))
     usage;
   let fn = !filename in
   let ppf = Format.std_formatter in
