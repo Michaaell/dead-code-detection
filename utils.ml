@@ -44,17 +44,17 @@ let rec print_rec = function
       print_rec xs  
 
 (* Function that prints a type_desc *)
-let rec print_type_desc ppf tv = match tv.typ_kind with
+let print_type_desc ppf tv = match tv.typ_kind with
   | Ttype_abstract -> debug "abstract"
   | Ttype_variant l -> print_variant l
   | Ttype_record l -> print_rec l
     
 (* Function that prints a PathSet *)  
-let rec print_set_path ppf = 
+let print_set_path ppf = 
   PathSet.iter (debug "%a " Printer.print_path)
 
 (* Function that prints a IdentSet *)
-let rec print_ids ppf = 
+let print_ids ppf = 
   IdentSet.iter (debug "%a " Ident.print)
 
 (* Function that prints a list of dependences with the index *)
@@ -78,7 +78,7 @@ let rec print_graph ppf = function
       print_graph ppf xs
 
 (* Function that prints a DepMap *)
-let rec print_graph_map ppf =
+let print_graph_map ppf =
   DepMap.iter (fun k e ->
     debug "@[ %a : " Printer.print_path k;
     PathSet.iter (fun x -> debug "%a " Printer.print_path x) e;
@@ -108,16 +108,16 @@ let get_modname filename =
   cmt_inf.cmt_modname
 
 (* Function that prints the dependences of the whole project *)
-let rec print_list l = 
+let print_list l = 
   List.iter (fun (n,(_,d)) -> 
     debug "%s : %a\n" n print_graph d) l
 
 (* Function that prints the index of the whole project *)
-let rec print_list2 l = 
+let print_list2 l = 
   List.iter (fun (n,(c,_)) -> 
     debug "%s : %a\n" n print_cnst c) l
 
 (* Function that prints the DepMap of the whole project *)
-let rec print_deps_map l = 
+let print_deps_map l = 
   List.iter (fun (n,(_,d)) -> 
     debug "%s : %a\n" n print_graph_map d) l

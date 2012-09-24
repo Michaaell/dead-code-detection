@@ -10,8 +10,6 @@ let test_flag = ref false
 
 let elim_flag = ref false
 
-let side_flag = ref false
-
 let parse_arg_list = Str.split (Str.regexp "[ \t]+")
 
 let rec iter_dir dirname =
@@ -64,6 +62,7 @@ let _ =
     then
       begin
         iter_dir !dirname;
+        (* List.iter (fun x -> print_endline ("-> "^x)) !cmt_list; *)
         let syst =
           List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
         let used = Deps.calc_inter_live syst in

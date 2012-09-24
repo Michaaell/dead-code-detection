@@ -1,24 +1,23 @@
-open Types
 open Typedtree
 open Ident
 open Cmt_format
 
-let rec print_warning_id id loc =
+let print_warning_id id loc =
   Utils.debug "@[%a@] %s is unused@." 
     Location.print loc.Asttypes.loc
     id.name
     (* Printer.print_warning_path (Warnings.Unused_var id.Ident.name) *)
 
-let rec print_warning_path path loc =
-  Utils.debug "@[%a@] %s is unused@."
-    Location.print loc.Asttypes.loc
-    (Path.head path).name
-    (* Printer.print_warning_path (Warnings.Unused_var (Path.head path).name) *)
+(* let print_warning_path path loc = *)
+(*   Utils.debug "@[%a@] %s is unused@." *)
+(*     Location.print loc.Asttypes.loc *)
+(*     (Path.head path).name *)
+(*     (\* Printer.print_warning_path (Warnings.Unused_var (Path.head path).name) *\) *)
 
-let rec is_in e s = 
-  Utils.IdentSet.mem e s
+(* let is_in e s =  *)
+(*   Utils.IdentSet.mem e s *)
 
-let rec is_in_id id s = 
+let is_in_id id s = 
   Utils.PathSet.mem (Path.Pident id) s
 
 let rec clean_exp idlist = function
@@ -42,7 +41,7 @@ let rec clean_exp idlist = function
   | _ as x -> x
 
 and clean_let_list id_list =
-  let rec clean_patexp (p,e1) = match p.pat_desc with
+  let clean_patexp (p,e1) = match p.pat_desc with
     | Tpat_var (id,loc) ->
         if not (is_in_id id id_list)
         then 

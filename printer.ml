@@ -1,49 +1,14 @@
 open Cmt_format
-open Types
 open Typedtree
 open Format
 
-(* let rec print_warning_path ppf w = *)
-(*   ignore (Warnings.print ppf w) *)
-
+(* Fonction qui print un Path *)
 let rec print_path ppf = function 
   | Path.Pident id -> (Ident.print ppf id)
   | Path.Pdot (p,s,i) -> fprintf ppf "%a.%s(%i)" print_path p s i
   | Path.Papply (p1,p2) -> fprintf ppf "%a %a" print_path p1 print_path p2 
-
-let rec print_type_expr ppf t_exp = match t_exp.desc with
-  | Tvar (Some s) -> fprintf ppf "%s" s
-  | Tvar None -> fprintf ppf "Tvar None"
-  | Tarrow (lbl,type_exp1,type_exp2,commu) -> 
-      fprintf ppf "%a -> %a" print_type_expr type_exp1 print_type_expr type_exp2
-  | Ttuple list -> fprintf ppf "tuple"
-  | Tconstr (path,t_exp_list,_) ->
-      let aux ppf l = 
-        List.iter (fun x -> 
-          fprintf ppf "@ %a" print_type_expr x) t_exp_list in 
-      fprintf ppf "Tconstr %a [%a]" print_path path aux t_exp_list
-  | Tobject _ -> fprintf ppf "object" 
-  | Tfield _ -> fprintf ppf "field"
-  | Tnil -> fprintf ppf "nil"
-  | Tpackage (_, _, _) -> fprintf ppf "package"
-  | Tpoly (_, _) -> fprintf ppf "poly" 
-  | Tunivar _ -> fprintf ppf "univar"
-  | Tvariant _ -> fprintf ppf "variant"
-  | Tsubst _ -> fprintf ppf "subst"
-  | Tlink type_exp -> 
-      fprintf ppf "Tlink(%a)" print_type_expr type_exp
-
-let rec print_value_kind ppf = function
-  | Val_prim prim_desc -> fprintf ppf "%s" prim_desc.Primitive.prim_native_name
-  | Val_reg -> fprintf ppf "value"
-  | _ -> fprintf ppf "TODO vd"
-
-and print_value_desc ppf vd = 
-  fprintf ppf "%a/%a" print_type_expr vd.val_type print_value_kind vd.val_kind 
-
-and print_texp_construct (path,constor_desc,exp_list) = ()  
   
-and print_tt_expr_desc ppf = function
+let rec print_tt_expr_desc ppf = function
   | Texp_ident (path,loc,val_desc) ->
       fprintf ppf "%a" print_path path
   | Texp_constant c ->
@@ -93,14 +58,14 @@ and print_function ppf (lbl,arg_list,part) =
   fprintf ppf "fun %s %a" lbl print_patexp arg_list
 
 and print_apply ppf (e,list) =
-  let rec aux ppf = function
+  let aux ppf = function
     | (lbl,Some e1,_) ->
         (* fprintf ppf "%s ," lbl *)
         fprintf ppf "%s %a," lbl print_tt_expr_desc e1.exp_desc
     | (lbl,None,_) ->
         fprintf ppf "%s," lbl
   in
-  let rec pr_param ppf ll = 
+  let pr_param ppf ll = 
     List.iter (fun l -> fprintf ppf "@ %a" aux l) ll in
   (* fprintf ppf "%a (%a)" print_tt_expr_desc e.exp_desc aux list *)
   fprintf ppf "@[<2>(apply@ %a%a)@]" print_tt_expr_desc e.exp_desc pr_param list
@@ -152,7 +117,7 @@ let rec print_core_type_desc ppf = function
   | Ttyp_var s -> fprintf ppf "Ttyp_var %s" s
   | Ttyp_arrow (lbl,_,_) -> fprintf ppf "Ttyp_var %s" lbl
   | Ttyp_tuple _ -> fprintf ppf "Ttyp_tuple"
-  | Ttyp_constr (path,_,_) -> fprintf ppf "c%a" print_path path
+  | Ttyp_constr (path,_,_) -> fprintf ppf "constr[%a]" print_path path
   | Ttyp_object _ -> fprintf ppf "Ttyp_object"
   | Ttyp_class (path,_,_,_) -> fprintf ppf "cl%a" print_path path
   | Ttyp_alias (_,s) -> fprintf ppf "Ttyp_alias %s" s
@@ -164,12 +129,12 @@ let rec print_core_type_desc ppf = function
 and print_core_type ppf ct =
   fprintf ppf "%a" print_core_type_desc ct.ctyp_desc
 
-let rec print_type ppf (id,loc,typ_desc) = 
-  let rec print_type_var ppf = 
+let print_type ppf (id,loc,typ_desc) = 
+  let print_type_var ppf = 
     List.iter (fun (id,_,ctl,_) ->
       fprintf ppf "@ %a " Ident.print id;
       List.iter (print_core_type ppf) ctl) in
-  let rec print_type_rec ppf = 
+  let print_type_rec ppf = 
     List.iter (fun (id,_,_,ct,_) -> 
       fprintf ppf "@ %a:%a " Ident.print id print_core_type ct) in
   let print_type_desc ppf td = match td.typ_kind with  
@@ -177,7 +142,7 @@ let rec print_type ppf (id,loc,typ_desc) =
     | Ttype_record l -> fprintf ppf "%a" print_type_rec l
     | Ttype_abstract -> fprintf ppf "abst"
   in
-  fprintf ppf "type %a = %a" Ident.print id print_type_desc typ_desc
+  fprintf ppf "type %a = %a@." Ident.print id print_type_desc typ_desc
   
   
 let print_struct_item_descr ppf = function
@@ -192,7 +157,7 @@ let print_struct_item_descr ppf = function
   | Tstr_module (_, _, _) -> fprintf ppf "Tmodule@,"
   | Tstr_recmodule _ -> fprintf ppf "Trecmodule@,"
   | Tstr_modtype (_, _, _) -> fprintf ppf "Tmodtype@,"
-  | Tstr_open (_, _) -> fprintf ppf "Topen@,"
+  | Tstr_open (_, _) -> fprintf ppf "Topen@."
   | Tstr_class _ -> fprintf ppf "Tclass@,"
   | Tstr_class_type _ -> fprintf ppf "Tclass_type@,"
   | Tstr_include (_, _) -> fprintf ppf "Tinclude@,"

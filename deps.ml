@@ -41,7 +41,7 @@ let rec calc_dep deps_list id = function
   | Texp_let (rec_flag,list,e) ->
       begin
         match rec_flag with
-          | Asttypes.Recursive -> (* Letrec.check_rec_list list *) ()
+          | Asttypes.Recursive -> Letrec.check_rec_list list
           | _ -> ()
       end;
       let new_dep_list = calc_dep_let deps_list list in
@@ -243,7 +243,7 @@ let calc_struct_item_descr src index type_env ident_prog deps = function
   | Tstr_value (recflag,list) -> 
       begin
         match recflag with
-          | Asttypes.Recursive -> (* Letrec.check_rec_list list *) ()
+          | Asttypes.Recursive -> Letrec.check_rec_list list
           | _ -> ()
       end;
       (* if not !rec_used then Utils.debug "%a" Location.print !fst_letrec_loc.Asttypes.loc; *)
@@ -320,21 +320,21 @@ let calc filename  =
       | _ ->  failwith ("can't calc "^filename)
   (* with Not_found -> failwith ("can't read "^filename) *)
     
-let rec live id acc m = 
-  if (Utils.DepMap.mem id m)
-  then
-    let dep_id = Utils.DepMap.find id m in
-    Utils.PathSet.fold (fun x a ->
-    match x with
-      | Path.Pdot _ -> a
-      | _ -> 
-          if Utils.PathSet.mem x a
-          then a
-          else
-            let new_acc = Utils.PathSet.add x a in
-            (live x new_acc m)
-    ) dep_id acc
-  else acc
+(* let rec live id acc m =  *)
+(*   if (Utils.DepMap.mem id m) *)
+(*   then *)
+(*     let dep_id = Utils.DepMap.find id m in *)
+(*     Utils.PathSet.fold (fun x a -> *)
+(*     match x with *)
+(*       | Path.Pdot _ -> a *)
+(*       | _ ->  *)
+(*           if Utils.PathSet.mem x a *)
+(*           then a *)
+(*           else *)
+(*             let new_acc = Utils.PathSet.add x a in *)
+(*             (live x new_acc m) *)
+(*     ) dep_id acc *)
+(*   else acc *)
 
 let mod_equality p m = match p with
   | Path.Pident id -> id.name = m
@@ -348,7 +348,7 @@ let rec id_from_cnstr i = function
   | _::xs -> id_from_cnstr i xs
 
 
-let rec id_from_t_env n te = 
+let id_from_t_env n te = 
   List.assoc n te 
       
 let rec get_from_ident_prog_list id = function
@@ -356,10 +356,10 @@ let rec get_from_ident_prog_list id = function
   | (x,y)::xs when x = id -> y
   | _::xs -> get_from_ident_prog_list id xs
 
-let rec get_fn_from_ident_prog_list p = function
-  | [] -> failwith "no path in ident_prog_list"
-  | (x,y)::xs when y = p -> x
-  | _::xs -> get_fn_from_ident_prog_list p xs
+(* let rec get_fn_from_ident_prog_list p = function *)
+(*   | [] -> failwith "no path in ident_prog_list" *)
+(*   | (x,y)::xs when y = p -> x *)
+(*   | _::xs -> get_fn_from_ident_prog_list p xs *)
 
 let rec is_mod p = function
   | [] -> false
@@ -386,10 +386,10 @@ let rec get_cmt_from_modname mn = function
   | _::xs -> get_cmt_from_modname mn xs
 
 
-let rec update_deps p id1 id2 = function
-  | [] -> failwith "no modname with this id"
-  | (x1,(c,d))::xs when mod_equality p x1 -> (x1,(c,(add_entry id1 id2 d)))::xs
-  | x::xs -> x::(update_deps p id1 id2 xs)
+(* let rec update_deps p id1 id2 = function *)
+(*   | [] -> failwith "no modname with this id" *)
+(*   | (x1,(c,d))::xs when mod_equality p x1 -> (x1,(c,(add_entry id1 id2 d)))::xs *)
+(*   | x::xs -> x::(update_deps p id1 id2 xs) *)
 
 
 let rec calc_inter_dep_mod_aux syst te mn mn_deps used = function
