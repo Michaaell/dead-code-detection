@@ -1,5 +1,4 @@
-OCAMLC=ocamlc
-OCAMLBUILDDIR=/home/michael/.opam/4.00.0/build/ocaml/
+include Makefile.config
 
 LIBS=-I +compiler-libs ocamlcommon.cma -I $(OCAMLBUILDDIR)tools pprintast.cmo untypeast.cmo str.cma
 
