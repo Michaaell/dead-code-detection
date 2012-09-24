@@ -8,6 +8,21 @@ let print_warning_id id loc =
     id.name
     (* Printer.print_warning_path (Warnings.Unused_var id.Ident.name) *)
 
+let print_warning_type id loc =
+  Utils.debug "@[%a@] type %s is never used.@." 
+    Location.print loc.Asttypes.loc
+    id.name
+
+let print_warning_cnstr id loc =
+  Utils.debug "@[%a@] constructor %s is never used.@." 
+    Location.print loc.Asttypes.loc
+    id.name
+
+let print_warning_rec id loc =
+  Utils.debug "@[%a@] field %s is never used.@." 
+    Location.print loc.Asttypes.loc
+    id.name
+
 (* let print_warning_path path loc = *)
 (*   Utils.debug "@[%a@] %s is unused@." *)
 (*     Location.print loc.Asttypes.loc *)
@@ -55,6 +70,42 @@ and clean_let_list id_list =
     | [] -> []
     | x::xs -> clean_patexp x::(clean_let_aux xs)
   in clean_let_aux
+
+let clean_record l idl =
+  let l1,l2 = List.partition (fun (id,loc,_,_,_) -> (is_in_id id idl)) l in
+  List.iter (fun (id,loc,_,_,_) -> print_warning_rec id loc) l2;
+  l1
+    
+let clean_variant l idl =
+  let l1,l2 = List.partition (fun (id,loc,_,_) -> (is_in_id id idl)) l in
+  List.iter (fun (id,loc,_,_) -> print_warning_cnstr id loc) l2;
+  l1
+
+let clean_type id loc td idl = match td.typ_kind with
+    | Ttype_variant list -> 
+        let l = clean_variant list idl in
+        if List.length l = 0 
+        then 
+          begin 
+            print_warning_type id loc;
+            None
+          end
+        else Some (Ttype_variant l)
+    | Ttype_record list -> 
+        let l = clean_record list idl in
+        if List.length l = 0 
+        then 
+          begin 
+            print_warning_type id loc;
+            None
+          end
+        else Some (Ttype_record l)
+    | _ as x -> Some x   
+
+let clean_type_decl ltd idl =
+  let _ = List.map (fun (id,loc,tdl) -> 
+    (id,loc,clean_type id loc tdl idl)) ltd in 
+  ()
   
 let soft_clean_struct_item_descr src idl = function
   | Tstr_eval e -> Some ( Tstr_eval { e with exp_desc = clean_exp idl e.exp_desc})
@@ -63,7 +114,7 @@ let soft_clean_struct_item_descr src idl = function
       if (new_list = []) 
       then None
       else Some (Tstr_value (recflag,new_list))
-  | Tstr_type l -> Some (Tstr_type l)
+  | Tstr_type l -> clean_type_decl l idl;Some (Tstr_type l)
   | _ as x -> Some x
 
 
