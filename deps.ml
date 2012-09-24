@@ -41,7 +41,7 @@ let rec calc_dep deps_list id = function
   | Texp_let (rec_flag,list,e) ->
       begin
         match rec_flag with
-          | Asttypes.Recursive -> Letrec.check_rec_list list
+          | Asttypes.Recursive -> (* Letrec.check_rec_list list *) ()
           | _ -> ()
       end;
       let new_dep_list = calc_dep_let deps_list list in
@@ -154,8 +154,8 @@ and calc_t_rec type_env l =
 and calc_t_env type_env l =
   List.fold_left (fun te (_,_,td) -> 
     match td.typ_kind with  
-      | Ttype_variant l -> calc_t_var type_env l
-      | Ttype_record l -> calc_t_rec type_env l
+      | Ttype_variant l -> calc_t_var te l
+      | Ttype_record l -> calc_t_rec te l
       | Ttype_abstract -> te
   ) type_env l
 
@@ -239,12 +239,12 @@ let calc_struct_item_descr src index type_env ident_prog deps = function
   | Tstr_value (recflag,list) -> 
       begin
         match recflag with
-          | Asttypes.Recursive -> Letrec.check_rec_list list
+          | Asttypes.Recursive -> (* Letrec.check_rec_list list *) ()
           | _ -> ()
       end;
       (* if not !rec_used then Utils.debug "%a" Location.print !fst_letrec_loc.Asttypes.loc; *)
       (calc_index_let index list,type_env,calc_dep_let deps list)
-  | Tstr_type l -> (index,calc_t_env type_env l(* type_env *),deps)
+  | Tstr_type l -> (index,calc_t_env type_env l,deps)
   | Tstr_include (_, _) -> failwith "inc todo"
   | Tstr_class_type _ -> failwith "ct todo"
   | Tstr_class _ -> failwith "cl todo"
@@ -254,7 +254,7 @@ let calc_struct_item_descr src index type_env ident_prog deps = function
   | Tstr_module (id, _, _) ->  incr ind;((!ind-1,Path.Pident id)::index,type_env,deps)
   | Tstr_exn_rebind (_, _, _, _) -> failwith "exnreb todo"
   | Tstr_exception (id, _, _) -> incr ind;((!ind-1,Path.Pident id)::index,type_env,deps)
-  | Tstr_primitive (_, _, _)   -> failwith "prim todo"
+  | Tstr_primitive (_, _, _)   -> (index,type_env,deps)
         
 let calc_structure_items src list =
   ident_prog := Path.Pident (Ident.create src);
@@ -271,29 +271,34 @@ let calc_annot src = function
       (cnst,t_env,deps)
   | _ -> failwith "Can't print that" 
  
-let merge_cnst_mli fn cnst =
+let merge_cnst_mli fn cnst t_env =
   let ind = ref 0 in
   let cmi_inf = Cmt_format.read_cmi (fn^"i") in
+  let is_in_cnst_list n =
+    List.exists (fun (_,p) -> 
+      match p with 
+        | Path.Pident var_name -> var_name.Ident.name = n
+        | _ -> false) cnst in
+   let get_in_cnst_list n =
+    List.find (fun (_,p) -> 
+      match p with 
+        | Path.Pident var_name -> var_name.Ident.name = n
+        | _ -> false) cnst in
   let get_item_name = function
     | Types.Sig_value (id,_) | Types.Sig_type (id,_,_) 
     | Types.Sig_exception  (id,_) | Types.Sig_module (id,_,_) 
     | Types.Sig_modtype  (id,_) | Types.Sig_class  (id,_,_)
     | Types.Sig_class_type  (id,_,_) -> id.Ident.name in
-  let get_path l n = 
-    List.find (fun (_,x) -> 
-      match x with 
-        | Path.Pident var_name -> var_name.Ident.name = n
-        | _ -> false
-    ) l in
-  List.map (fun x -> 
-    let n = get_item_name x in
-    let (_,p) = get_path cnst n in
+  let list_sign = List.map get_item_name cmi_inf.Cmi_format.cmi_sign in
+  let list_val = List.filter is_in_cnst_list list_sign in
+  List.map (fun x ->
+    let (_,p) = get_in_cnst_list x in
     incr ind;
-    (!ind-1,p)
-  ) cmi_inf.Cmi_format.cmi_sign
+    (!ind-1,p)) list_val
+
 
 let calc filename  =
-  try
+  (* try *)
     let infos = Cmt_format.read filename in
     match infos with
       | None, Some cmt_inf ->
@@ -302,14 +307,14 @@ let calc filename  =
           cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
           let (cnst,t_env,deps) = 
             calc_annot cmt_inf.cmt_modname cmt_inf.cmt_annots in
-          let mli_cnst = merge_cnst_mli filename cnst in
+          let mli_cnst = merge_cnst_mli filename cnst t_env in
           (mli_cnst,t_env,deps)
       | Some cmi_inf, Some cmt_inf ->
           ind := 0;
           cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
           calc_annot cmt_inf.cmt_modname cmt_inf.cmt_annots
       | _ ->  failwith ("can't calc "^filename)
-  with Not_found -> failwith ("can't read "^filename)
+  (* with Not_found -> failwith ("can't read "^filename) *)
     
 let rec live id acc m = 
   if (Utils.DepMap.mem id m)
@@ -335,13 +340,12 @@ let mod_equality p m = match p with
 (** !!!!!!! + NAME EQ pour etre sur ?! *)
 let rec id_from_cnstr i = function
   | [] -> failwith ("can't find construction "^string_of_int i)
-  | (x,y)::xs when x = i -> 
-      (* Utils.debug "@[ +%a(%i)+@]@." Printer.print_path y i; *)
-      y
+  | (x,y)::xs when x = i -> y
   | _::xs -> id_from_cnstr i xs
 
 
-let rec id_from_t_env n te = List.assoc n te 
+let rec id_from_t_env n te = 
+  List.assoc n te 
       
 let rec get_from_ident_prog_list id = function
   | [] -> failwith "no id"
@@ -404,6 +408,8 @@ let rec calc_inter_dep_mod_aux syst te mn mn_deps used = function
             begin
               let _,t_env,p_deps = (get_deps_cnst (get_name p) syst) in
               let p_mn = get_mod_id p !ident_prog_list in
+              (* Utils.debug "=> %a " Printer.print_path x; *)
+              (* Utils.debug "in %a @." Printer.print_path p_mn; *)
               let id1 = id_from_t_env n t_env in
               let new_used = add_entry p_mn (Path.Pident id1) used in
               (* let new_used = add_entry mn x used in *)
@@ -437,7 +443,7 @@ let calc_inter_live syst =
   let used = 
     List.fold_left (fun used (fn,(cnst,te,d)) ->
       (* Utils.debug "==\n %a ==\n@." Utils.print_graph_map d; *)
-      (* List.iter (fun (_,x) -> Utils.debug "t : %a @." Printer.print_path x) cnst; *)
+      (* List.iter (fun (i,x) -> Utils.debug "%i : %a @." i Printer.print_path x) cnst; *)
       let id = get_from_ident_prog_list fn !ident_prog_list in
       calc_inter_dep_mod syst te id id d used) Utils.DepMap.empty syst in
   List.map (fun (fn,_) ->
