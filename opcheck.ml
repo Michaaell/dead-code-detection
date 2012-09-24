@@ -1,5 +1,6 @@
+open Typedtree
 
-(* Structure qui gere les modules ouverts dont on veut verifier l'utilité *)
+(* Structure that deals with opened module that we want to check *)
 module OpenMap = Map.Make( 
   struct
     let compare = Pervasives.compare
@@ -7,24 +8,25 @@ module OpenMap = Map.Make(
   end )
 
 
-(* Fonction qui retourne le nom du module *)
+(* Fonction that extracts the name of a module given its path *)
 let print_open_modname = function
   | Path.Pident id -> id.Ident.name
   | _ -> ""
   
-(* Fonction qui print un warning pour un open inutile *)
+(* Fonction that prints a warning regarding an unseless open *)
 let print_warning_open p loc =
   let op_name = print_open_modname p in
   Utils.debug "@[%a@] unused open %s @." 
     Location.print loc.Asttypes.loc
     op_name
 
-(* Fonction qui print le long ident (Debug) *)
+(* Fonction that prints the long ident (Debug) *)
 let print_lg_id lid = 
   List.iter print_endline (Longident.flatten lid)
 
-(* Verifie si un ident est préfixé du nom du module ou pas *)
+(* Fonction that checks the long ident *)
 let is_long_ident_prefixed k lid =
+  (* print_lg_id lid; *)
   let list = Longident.flatten lid in
   if List.length list < 2 then false
   else
@@ -39,19 +41,19 @@ let is_long_ident_prefixed k lid =
       | Path.Papply (p1,p2) ->  false
     in aux k l
 
-(* Fonction qui verifie la structure et print un warning le cas échéant *)
+(* Fonction that checks the structure and prints a warning if needed *)
 let print_warn_mod_ext s =
   OpenMap.iter (fun k (v,loc) -> 
     if not v then print_warning_open k loc) s
-    (* if not v then Utils.debug "Unused open %a @." Printer.print_path k *)
 
-(* Fonction qui ajoute un module a verifier *)
+(* Fonction that adds a module to the check list *)
 let add_mod_ext k loc m =
   if OpenMap.mem k m
   then m
   else OpenMap.add k (false,loc) m
 
-(* Fonction qui va met a jour la structure pour un module donné *)
+(* Fonction that updates the structure regarging a module *)
+(* We need to check if the value is prefixed by its module name *)
 let rec set_mod_ext_used (k,lg_id) m =
   if OpenMap.mem k m
   then 
@@ -69,4 +71,12 @@ let rec set_mod_ext_used (k,lg_id) m =
         | _ -> m
     end
 
-      
+(* Fonction that checks core type desc *)
+let check_core_type_desc m ct = match ct.ctyp_desc with
+  | Ttyp_constr (path,lg_ident,_) | Ttyp_class (path,lg_ident,_,_) ->
+      set_mod_ext_used (path,lg_ident) m
+  | _ -> m
+
+(* Fonction that check  the core type desc list of a type *)
+let check_core_type_desc_list m l =
+  List.fold_left (fun acc x -> check_core_type_desc acc x) m l

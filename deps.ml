@@ -146,10 +146,14 @@ let rec calc_dep deps_list id = function
   | Texp_assertfalse -> deps_list
 
 and calc_t_var type_env l =
-  List.fold_left (fun te (id,_,_,_) -> (id.Ident.name,id)::te) type_env l
+  List.fold_left (fun te (id,_,ctl,_) -> 
+    mod_ext := Opcheck.check_core_type_desc_list !mod_ext ctl;
+    (id.Ident.name,id)::te) type_env l
 
 and calc_t_rec type_env l =
-  List.fold_left (fun te (id,_,_,_,_) -> (id.Ident.name,id)::te) type_env l
+  List.fold_left (fun te (id,_,_,ct,_) -> 
+    mod_ext := Opcheck.check_core_type_desc !mod_ext ct;
+    (id.Ident.name,id)::te) type_env l
     
 and calc_t_env type_env l =
   List.fold_left (fun te (_,_,td) -> 
