@@ -1,30 +1,30 @@
 open Typedtree
 
-(* Fonction pour printer le warning concernant un letrec inutile *)
+(* Function that prints the warning regarding a useless letrec *)
 let print_warning_letrec loc =
   Utils.debug "@[%a@] unused rec flag @." 
     Location.print loc.Asttypes.loc
 
-(* Flag pour garder la 1ere loc d'une liste de letrec *)
+(* Flag to keep the 1st loc of a list of letrec *)
 let fst_letrec = ref true
 
-(* L'ident du 1er identificateur d'une liste de letrec *)
+(* The 1st ident of a list of letrec *)
 let let_rec = ref (Utils.IdentSet.empty)
 
-(* Loc de l'identificateur visé *)
+(* Loc of let_rec ident *)
 let fst_letrec_loc = ref (Location.mknoloc "")
 
-(* Flag pour verifier si un letrec est utilisé ou non *)
+(* Flag to check if a letrec is used *)
 let rec_used = ref false
 
-(* Fonction qui verifie si un path est présent dans un ensemble d'ident *)
+(* Function that checks if a Path is in a set of Path *)
 let rec is_in_set p s = match p with
   | Path.Pident id -> Utils.IdentSet.mem id s
   | Path.Pdot (p,_,_) -> is_in_set p s
   | _ -> false
 
-(* Fonction qui parcourt le corps de la fonction déclaré récurcive
-   et cherche un appel à cette fonction *)
+(* Function that looks for a call to a rec fun in the body of the function
+ *)
 let rec check_rec_exp e = match e.exp_desc with
   | Texp_ident (path, _, _) ->
       if is_in_set path !let_rec
@@ -93,9 +93,8 @@ let rec check_rec_exp e = match e.exp_desc with
       end
   | Texp_assertfalse -> ()
 
-(* Fonction qui créée l'ensemble des ident qui va
-   etre analysé et l'information de location pour 
-   l'eventuel warning *)
+(* Function that create a set od Ident to be analysed and 
+   keep the loc information *)
 let rec check_rec_pat pat = match pat.pat_desc with
   | Tpat_var (id,loc) -> 
       if !fst_letrec 
@@ -109,7 +108,7 @@ let rec check_rec_pat pat = match pat.pat_desc with
   | Tpat_tuple l -> List.iter check_rec_pat l
   | _ -> ()
 
-(* Fonction pour analyser l'ensemble des ident déclaré letrec *)
+(* Function to analyse a set of ident *)
 let check_rec_list l =
   fst_letrec := true;
   let_rec := Utils.IdentSet.empty;
