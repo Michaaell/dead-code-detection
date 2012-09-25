@@ -39,11 +39,6 @@ let rec calc_dep deps_list id = function
       else add_entry id dep_id deps_list
   | Texp_constant c -> deps_list
   | Texp_let (rec_flag,list,e) ->
-      begin
-        match rec_flag with
-          | Asttypes.Recursive -> Letrec.check_rec_list list
-          | _ -> ()
-      end;
       let new_dep_list = calc_dep_let deps_list list in
       calc_dep new_dep_list id e.exp_desc
   | Texp_function (lbl,l,part) ->
@@ -241,19 +236,13 @@ and dep_in_patexp_case p e1 id dep_list =
 let calc_struct_item_descr src index type_env ident_prog deps = function
   | Tstr_eval e -> (index,type_env,calc_dep deps ident_prog e.exp_desc)
   | Tstr_value (recflag,list) -> 
-      begin
-        match recflag with
-          | Asttypes.Recursive -> Letrec.check_rec_list list
-          | _ -> ()
-      end;
-      (* if not !rec_used then Utils.debug "%a" Location.print !fst_letrec_loc.Asttypes.loc; *)
       (calc_index_let index list,type_env,calc_dep_let deps list)
   | Tstr_type l -> (index,calc_t_env type_env l,deps)
   | Tstr_include (_, _) -> failwith "inc todo"
   | Tstr_class_type _ -> failwith "ct todo"
   | Tstr_class _ -> failwith "cl todo"
   | Tstr_open (p,lid) -> mod_ext := Opcheck.add_mod_ext p lid !mod_ext;(index,type_env,deps)
-  | Tstr_modtype (_, _, _) -> failwith "modtype todo"
+  | Tstr_modtype (_, _, _) -> (index,type_env,deps)
   | Tstr_recmodule _ -> (index,type_env,deps)
   | Tstr_module (id, _, _) ->  incr ind;((!ind-1,Path.Pident id)::index,type_env,deps)
   | Tstr_exn_rebind (_, _, _, _) -> failwith "exnreb todo"
@@ -271,8 +260,8 @@ let calc_structure_items src list =
 let calc_annot src = function
   | Implementation strct -> 
       let cnst,t_env,deps = calc_structure_items src strct.str_items in
-      Opcheck.print_warn_mod_ext !mod_ext;
-      (cnst,t_env,deps)
+      mod_ext := Opcheck.clean_mod_ext !mod_ext;
+      (cnst,t_env,!mod_ext,deps)
   | _ -> failwith "Can't print that" 
  
 let merge_cnst_mli fn cnst t_env =
@@ -309,10 +298,10 @@ let calc filename  =
           (** Presence d'un mli, il faut calculer les index a l'aide du .cmti*)
           ind := 0;
           cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
-          let (cnst,t_env,deps) = 
+          let (cnst,t_env,opn,deps) = 
             calc_annot cmt_inf.cmt_modname cmt_inf.cmt_annots in
           let mli_cnst = merge_cnst_mli filename cnst t_env in
-          (mli_cnst,t_env,deps)
+          (mli_cnst,t_env,opn,deps)
       | Some cmi_inf, Some cmt_inf ->
           ind := 0;
           cmt_modname := (filename,cmt_inf.cmt_modname)::!cmt_modname;
@@ -398,7 +387,7 @@ let rec calc_inter_dep_mod_aux syst te mn mn_deps used = function
         if (is_mod p !ident_prog_list && i <> -1)
         then
           begin
-            let p_cnstr,_,p_deps = (get_deps_cnst (get_name p) syst) in
+            let p_cnstr,_,_,p_deps = (get_deps_cnst (get_name p) syst) in
             let p_mn = get_mod_id p !ident_prog_list in
             let id1 = id_from_cnstr i p_cnstr in
             let new_used = add_entry p_mn id1 used in
@@ -410,7 +399,7 @@ let rec calc_inter_dep_mod_aux syst te mn mn_deps used = function
           if (is_mod p !ident_prog_list && i = -1)
           then
             begin
-              let _,t_env,p_deps = (get_deps_cnst (get_name p) syst) in
+              let _,t_env,_,p_deps = (get_deps_cnst (get_name p) syst) in
               let p_mn = get_mod_id p !ident_prog_list in
               (* Utils.debug "=> %a " Printer.print_path x; *)
               (* Utils.debug "in %a @." Printer.print_path p_mn; *)
@@ -445,20 +434,18 @@ and calc_inter_dep_mod syst te mn id_cur mn_deps used =
         
 let calc_inter_live syst = 
   let used = 
-    List.fold_left (fun used (fn,(cnst,te,d)) ->
+    List.fold_left (fun used (fn,(cnst,te,opn,d)) ->
       (* Utils.debug "==\n %a ==\n@." Utils.print_graph_map d; *)
       (* List.iter (fun (i,x) -> Utils.debug "%i : %a @." i Printer.print_path x) cnst; *)
       let id = get_from_ident_prog_list fn !ident_prog_list in
       calc_inter_dep_mod syst te id id d used) Utils.DepMap.empty syst in
-  List.map (fun (fn,_) ->
+  List.map (fun (fn,(_,_,opn,_)) ->
     let id = get_from_ident_prog_list fn !ident_prog_list in
     let cmt = get_cmt_from_modname fn !cmt_modname in
     if Utils.DepMap.mem id used
-    then (cmt,Utils.DepMap.find id used)
-    else (cmt,Utils.PathSet.empty)
+    then (cmt,(Utils.DepMap.find id used,opn))
+    else (cmt,(Utils.PathSet.empty,opn))
   ) syst
-
-
 
 
 

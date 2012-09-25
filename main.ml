@@ -28,6 +28,8 @@ let usage = "usage: " ^ Sys.argv.(0) ^ " [cmt1 cmt2 cmt3 ...] [-elim cmt_file] [
 let speclist = [
   ("-elim", Arg.String (fun s -> cmt_list := parse_arg_list s;elim_flag := true),
    ": detect dead code in source file giving the cmt files");
+  ("-short", Arg.Unit (fun () -> Utils.short_flag := true),
+   ": print rapport in short version");
   ("-print", Arg.String (fun s -> filename := s;print_flag := true),
    ": print the typedtree giving the cmt file");
   ("-elim-project", Arg.String (fun s -> dirname := s; test_flag := true),
@@ -55,18 +57,19 @@ let _ =
       let syst =
         List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
       let used = Deps.calc_inter_live syst in
-      List.iter (fun (fn,s) -> ignore (Clean.soft_clean fn s)) used
+      List.iter (fun (fn,(idl,opn)) -> 
+        ignore (Clean.soft_clean fn idl opn)) used
     end
   else
     if (!test_flag)
     then
       begin
         iter_dir !dirname;
-        (* List.iter (fun x -> print_endline ("-> "^x)) !cmt_list; *)
         let syst =
           List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
         let used = Deps.calc_inter_live syst in
-        List.iter (fun (fn,s) -> ignore (Clean.soft_clean fn s)) used
+        List.iter (fun (fn,(idl,opn)) -> 
+          ignore (Clean.soft_clean fn idl opn)) used
       end
     else
       Printer.dttree ppf fn

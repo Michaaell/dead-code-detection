@@ -16,8 +16,8 @@ let print_open_modname = function
 (* Function that prints a warning regarding an unseless open *)
 let print_warning_open p loc =
   let op_name = print_open_modname p in
-  Utils.debug "@[%a@] unused open %s @." 
-    Location.print loc.Asttypes.loc
+  Utils.debug "@[%a@] unused Open %s @." 
+    Utils.print_loc loc.Asttypes.loc
     op_name
 
 (* Function that prints the long ident (Debug) *)
@@ -40,6 +40,10 @@ let is_long_ident_prefixed k lid =
           else aux p (List.tl l)
       | Path.Papply (p1,p2) ->  false
     in aux k l
+
+(* Function that clean the structure to keep only the useless open *)
+let clean_mod_ext s =
+  OpenMap.filter (fun k (v,_) -> not v) s
 
 (* Function that checks the structure and prints a warning if needed *)
 let print_warn_mod_ext s =

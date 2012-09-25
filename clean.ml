@@ -4,33 +4,23 @@ open Cmt_format
 
 let print_warning_id id loc =
   Utils.debug "@[%a@] %s is unused@." 
-    Location.print loc.Asttypes.loc
+    Utils.print_loc loc.Asttypes.loc
     id.name
-    (* Printer.print_warning_path (Warnings.Unused_var id.Ident.name) *)
 
 let print_warning_type id loc =
   Utils.debug "@[%a@] type %s is never used.@." 
-    Location.print loc.Asttypes.loc
+    Utils.print_loc loc.Asttypes.loc
     id.name
 
 let print_warning_cnstr id loc =
   Utils.debug "@[%a@] constructor %s is never used.@." 
-    Location.print loc.Asttypes.loc
+    Utils.print_loc loc.Asttypes.loc
     id.name
 
 let print_warning_rec id loc =
   Utils.debug "@[%a@] field %s is never used.@." 
-    Location.print loc.Asttypes.loc
+    Utils.print_loc loc.Asttypes.loc
     id.name
-
-(* let print_warning_path path loc = *)
-(*   Utils.debug "@[%a@] %s is unused@." *)
-(*     Location.print loc.Asttypes.loc *)
-(*     (Path.head path).name *)
-(*     (\* Printer.print_warning_path (Warnings.Unused_var (Path.head path).name) *\) *)
-
-(* let is_in e s =  *)
-(*   Utils.IdentSet.mem e s *)
 
 let is_in_id id s = 
   Utils.PathSet.mem (Path.Pident id) s
@@ -39,13 +29,19 @@ let rec clean_exp idlist = function
   | Texp_ident (path,loc,val_desc) as x -> x
   | Texp_constant c as x -> x
   | Texp_let (rec_flag,list,e) as x ->
+      begin
+        match rec_flag with
+          | Asttypes.Recursive -> Letrec.check_rec_list list
+          | _ -> ()
+      end;
       ignore (clean_let_list idlist list);
       ignore (clean_exp idlist e.exp_desc);
       x
   | Texp_function (lbl,l,part) as x ->
       let rec aux = function
         | [] -> []
-        | (p,e1)::ys -> ignore(clean_exp idlist e1.exp_desc);aux ys in ignore(aux l);x
+        | (p,e1)::ys -> ignore(clean_exp idlist e1.exp_desc);aux ys in (* P to check arg *)
+      ignore(aux l);x
   | Texp_apply (e,list) as x -> x
   | Texp_construct (path,loc,constr_des,list,_) as x -> x
   | Texp_sequence (e1,e2) ->
@@ -109,11 +105,16 @@ let clean_type_decl ltd idl =
   
 let soft_clean_struct_item_descr src idl = function
   | Tstr_eval e -> Some ( Tstr_eval { e with exp_desc = clean_exp idl e.exp_desc})
-  | Tstr_value (recflag,list) ->
+  | Tstr_value (rec_flag,list) ->
+      begin
+        match rec_flag with
+          | Asttypes.Recursive -> Letrec.check_rec_list list
+          | _ -> ()
+      end;
       let new_list = clean_let_list idl list in
       if (new_list = []) 
       then None
-      else Some (Tstr_value (recflag,new_list))
+      else Some (Tstr_value (rec_flag,new_list))
   | Tstr_type l -> clean_type_decl l idl;Some (Tstr_type l)
   | _ as x -> Some x
 
@@ -136,6 +137,13 @@ let soft_clean_annot src idl = function
   | _ -> failwith "Can't clean that" 
 
 
-let soft_clean filename idl =
+let soft_clean filename idl op =
   let cmt_inf = Cmt_format.read_cmt filename in
-  soft_clean_annot cmt_inf.cmt_modname idl cmt_inf.cmt_annots
+  let src_opt = cmt_inf.cmt_sourcefile in
+  match src_opt with
+    | None -> Utils.debug "Can't print warning for %s @." filename;
+    | Some src ->
+        Utils.debug " %s : @." src;
+        Opcheck.print_warn_mod_ext op;
+        let _ = soft_clean_annot cmt_inf.cmt_modname idl cmt_inf.cmt_annots in
+        Utils.debug "@."

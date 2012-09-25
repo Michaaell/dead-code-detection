@@ -3,7 +3,7 @@ open Typedtree
 (* Function that prints the warning regarding a useless letrec *)
 let print_warning_letrec loc =
   Utils.debug "@[%a@] unused rec flag @." 
-    Location.print loc.Asttypes.loc
+    Utils.print_loc loc.Asttypes.loc
 
 (* Flag to keep the 1st loc of a list of letrec *)
 let fst_letrec = ref true
@@ -23,8 +23,7 @@ let rec is_in_set p s = match p with
   | Path.Pdot (p,_,_) -> is_in_set p s
   | _ -> false
 
-(* Function that looks for a call to a rec fun in the body of the function
- *)
+(* Function that looks for a call to a rec fun in the body of the function *)
 let rec check_rec_exp e = match e.exp_desc with
   | Texp_ident (path, _, _) ->
       if is_in_set path !let_rec

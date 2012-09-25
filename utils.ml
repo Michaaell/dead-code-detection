@@ -1,5 +1,7 @@
 open Cmt_format
 open Typedtree
+open Lexing
+open Location
 
 (* Set of Path *)
 module PathSet = Set.Make( 
@@ -21,6 +23,9 @@ module DepMap = Map.Make(
     let compare = Pervasives.compare
     type t = Path.t
   end )
+
+(* Flag for short rapport *)
+let short_flag = ref false
 
 (* Tools for debugging *)
 let debug_flag = ref true
@@ -121,3 +126,21 @@ let print_list2 l =
 let print_deps_map l = 
   List.iter (fun (n,(_,d)) -> 
     debug "%s : %a\n" n print_graph_map d) l
+
+(* Function that print loc accordingly to the option *)
+let print_loc ppf loc =
+  
+  if !short_flag 
+  then
+    begin
+      let (msg_file, msg_line, msg_chars, msg_to, msg_colon) =
+        ("File \"", "line ", ", characters ", "-", ":") in
+      let (file, line, startchar) = get_pos_info loc.loc_start in
+      let endchar = 
+        loc.loc_end.Lexing.pos_cnum - loc.loc_start.Lexing.pos_cnum + startchar in
+      debug"%s%i" msg_line line;
+      if startchar >= 0 then
+        debug "%s%i%s%i :" msg_chars startchar msg_to endchar
+    end
+  else
+    print ppf loc 
