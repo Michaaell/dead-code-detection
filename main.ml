@@ -12,6 +12,7 @@ let elim_flag = ref false
 
 let parse_arg_list = Str.split (Str.regexp "[ \t]+")
 
+(* Function that recurcivly list all the .cmt in dirname *)
 let rec iter_dir dirname =
   if dirname = ""
   then ()
@@ -19,8 +20,13 @@ let rec iter_dir dirname =
     let files = Sys.readdir dirname in
     Array.iter (fun file ->
       let file = Filename.concat dirname file in
-      if Sys.is_directory file then iter_dir file;
-      if Filename.check_suffix file ".cmt" then cmt_list := file::!cmt_list;
+      if (Sys.file_exists file) 
+      then
+        begin
+          if Sys.is_directory file then iter_dir file;
+          if Filename.check_suffix file ".cmt" 
+          then cmt_list := file::!cmt_list
+        end
     ) files
       
 let usage = "usage: " ^ Sys.argv.(0) ^ " [cmt1 cmt2 cmt3 ...] [-elim cmt_file] [-print cmt_file] [-elim-project rep]"
@@ -57,8 +63,8 @@ let _ =
       let syst =
         List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
       let used = Deps.calc_inter_live syst in
-      List.iter (fun (fn,(idl,opn)) -> 
-        ignore (Clean.soft_clean fn idl opn)) used
+      List.iter (fun (fn,(idl,opn,args)) -> 
+        ignore (Clean.soft_clean fn idl opn args)) used
     end
   else
     if (!test_flag)
@@ -68,8 +74,8 @@ let _ =
         let syst =
           List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
         let used = Deps.calc_inter_live syst in
-        List.iter (fun (fn,(idl,opn)) -> 
-          ignore (Clean.soft_clean fn idl opn)) used
+        List.iter (fun (fn,(idl,opn,args)) -> 
+          ignore (Clean.soft_clean fn idl opn args)) used
       end
     else
       Printer.dttree ppf fn
