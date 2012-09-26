@@ -129,7 +129,6 @@ let print_deps_map l =
 
 (* Function that print loc accordingly to the option *)
 let print_loc ppf loc =
-  
   if !short_flag 
   then
     begin
@@ -144,3 +143,17 @@ let print_loc ppf loc =
     end
   else
     print ppf loc 
+
+(* Function that looks for the live idents from pstart in a DepMap *)
+let rec get_alive pstart acc deps =
+  if PathSet.mem pstart acc 
+  then acc
+  else
+    if DepMap.mem pstart deps
+    then
+      let deps_start = DepMap.find pstart deps in
+      PathSet.fold (fun x acc -> 
+        let new_acc = PathSet.add x acc in get_alive x new_acc deps) deps_start acc
+    else
+      acc
+      
