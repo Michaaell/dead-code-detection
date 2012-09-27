@@ -157,3 +157,26 @@ let rec get_alive pstart acc deps =
     else
       acc
       
+let rec is_in_primi i n = function
+  | [] -> false
+  | (i,p)::xs -> 
+      begin 
+        match p with
+          | Path.Pident id -> 
+              if id.Ident.name = n
+              then true
+              else is_in_primi i n xs
+          | _ -> is_in_primi i n xs
+      end
+
+let rec get_in_primi i n = function
+  | [] -> failwith ("can't find primi "^string_of_int i)
+  | (i,p)::xs -> 
+      begin 
+        match p with
+          | Path.Pident id -> 
+              if id.Ident.name = n
+              then p
+              else get_in_primi i n xs
+          | _ -> get_in_primi i n xs
+      end

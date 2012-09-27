@@ -22,8 +22,27 @@ let print_warning_rec id loc =
     Utils.print_loc loc.Asttypes.loc
     id.name
 
+let print_warning_arg id loc =
+  Utils.debug "@[%a@] argument %s is never used.@." 
+    Utils.print_loc loc.Asttypes.loc
+    id.name
+
 let is_in_id id s = 
   Utils.PathSet.mem (Path.Pident id) s
+
+(* let rec check_arg idl p = match p.pat_desc with *)
+(*   | Tpat_var (id,loc) -> *)
+(*       Utils.debug "looking for %a@." Ident.print id; *)
+(*       if is_in_id id idl *)
+(*       then () *)
+(*       else print_warning_arg id loc *)
+(*   | Tpat_alias (pat,id,loc) -> *)
+(*        if not (is_in_id id idl) *)
+(*        then *)
+(*          print_warning_arg id loc; *)
+(*       check_arg idl pat *)
+(*   | Tpat_tuple l -> List.iter (check_arg idl) l *)
+(*   | _ -> () *)
 
 let rec clean_exp idlist = function
   | Texp_ident (path,loc,val_desc) as x -> x
@@ -40,7 +59,7 @@ let rec clean_exp idlist = function
   | Texp_function (lbl,l,part) as x ->
       let rec aux = function
         | [] -> []
-        | (p,e1)::ys -> ignore(clean_exp idlist e1.exp_desc);aux ys in (* P to check arg *)
+        | (p,e1)::ys -> ignore(clean_exp idlist e1.exp_desc);aux ys in
       ignore(aux l);x
   | Texp_apply (e,list) as x -> x
   | Texp_construct (path,loc,constr_des,list,_) as x -> x
@@ -51,21 +70,20 @@ let rec clean_exp idlist = function
   | Texp_record (l,e_opt) as x -> x
   | _ as x -> x
 
-and clean_let_list id_list =
-  let clean_patexp (p,e1) = match p.pat_desc with
+and clean_let_list id_list l =
+  let rec clean_patexp (p,e1) = match p.pat_desc with
     | Tpat_var (id,loc) ->
         if not (is_in_id id id_list)
-        then 
-          begin 
-            print_warning_id id loc;
-            (p,e1) 
-          end
-        else (p,{ e1 with exp_desc = clean_exp id_list e1.exp_desc})
+        then print_warning_id id loc;
+        (p,{ e1 with exp_desc = clean_exp id_list e1.exp_desc}) 
+    | Tpat_tuple pat_list ->
+        let _ = List.map (fun x -> clean_patexp (x,e1)) pat_list in
+        (p,{ e1 with exp_desc = clean_exp id_list e1.exp_desc}) 
     | _ -> (p,{ e1 with exp_desc = clean_exp id_list e1.exp_desc}) in
   let rec clean_let_aux = function
     | [] -> []
     | x::xs -> clean_patexp x::(clean_let_aux xs)
-  in clean_let_aux
+  in clean_let_aux l
 
 let clean_record l idl =
   let l1,l2 = List.partition (fun (id,loc,_,_,_) -> (is_in_id id idl)) l in
@@ -103,7 +121,7 @@ let clean_type_decl ltd idl =
     (id,loc,clean_type id loc tdl idl)) ltd in 
   ()
   
-let soft_clean_struct_item_descr src idl = function
+let soft_clean_struct_item_descr src idl argmap = function
   | Tstr_eval e -> Some ( Tstr_eval { e with exp_desc = clean_exp idl e.exp_desc})
   | Tstr_value (rec_flag,list) ->
       begin
@@ -119,11 +137,11 @@ let soft_clean_struct_item_descr src idl = function
   | _ as x -> Some x
 
 
-let soft_clean_structure_items src l idl = 
+let soft_clean_structure_items src l idl argmap = 
   let rec aux = function
     | [] -> []
     | x::xs ->
-        let new_desc = soft_clean_struct_item_descr src idl x.str_desc in
+        let new_desc = soft_clean_struct_item_descr src idl argmap x.str_desc in
         begin
           match new_desc with
             | Some d -> {x with str_desc = d}::(aux xs)
@@ -131,13 +149,14 @@ let soft_clean_structure_items src l idl =
         end
   in aux l
 
-let soft_clean_annot src idl = function
+let soft_clean_annot src idl argmap = function
   | Implementation strct -> 
-      {strct with str_items = (soft_clean_structure_items src strct.str_items idl)}
+      {strct with str_items = 
+          soft_clean_structure_items src strct.str_items idl argmap}
   | _ -> failwith "Can't clean that" 
 
 
-let soft_clean filename idl op =
+let soft_clean filename idl op args =
   let cmt_inf = Cmt_format.read_cmt filename in
   let src_opt = cmt_inf.cmt_sourcefile in
   match src_opt with
@@ -145,5 +164,6 @@ let soft_clean filename idl op =
     | Some src ->
         Utils.debug " %s : @." src;
         Opcheck.print_warn_mod_ext op;
-        let _ = soft_clean_annot cmt_inf.cmt_modname idl cmt_inf.cmt_annots in
+        let _ = 
+          soft_clean_annot cmt_inf.cmt_modname idl args cmt_inf.cmt_annots in
         Utils.debug "@."
