@@ -34,7 +34,9 @@ let rec print_tt_expr_desc ppf = function
         fprintf ppf "@ %a" print_tt_expr_desc x.exp_desc) l in
       fprintf ppf "[%a]" aux exp_list
   | Texp_construct (path,loc,cnstr_desc,exp_list,_) -> 
-      fprintf ppf "Texp_construct(%a)" print_path path
+      fprintf ppf "Texp_construct(%a :" print_path path;
+      List.iter (fun x -> fprintf ppf "@.%a" print_tt_expr_desc x.exp_desc) exp_list;
+      fprintf ppf ")"
   | Texp_variant (lbl,e_opt) -> fprintf ppf "variant"
   | Texp_record (list,e_opt) -> 
       begin 
@@ -144,25 +146,36 @@ let print_type ppf (id,loc,typ_desc) =
   in
   fprintf ppf "type %a = %a@." Ident.print id print_type_desc typ_desc
   
+let rec print_mod_expr ppf me = match me.mod_desc with
+  | Tmod_ident (p, _) -> fprintf ppf "Tmod_ident (%a,_)" print_path p
+  | Tmod_structure str -> fprintf ppf "Tmod_struct(%a)" print_structure_items str.str_items
+  | Tmod_functor (id, _, _, me) -> 
+      fprintf ppf "Tmod_fun(%a,_,%a)" Ident.print id print_mod_expr me
+  | Tmod_apply (me1, me2, _) -> 
+      fprintf ppf "Tmod_appl((%a,%a,_)" print_mod_expr me1  print_mod_expr me2 
+  | Tmod_constraint (me, _, _, _) -> fprintf ppf "Tmod_constraint"
+  | Tmod_unpack (_,_)  -> fprintf ppf "Tmod_unpack"
   
-let print_struct_item_descr ppf = function
+  
+and print_struct_item_descr ppf = function
   | Tstr_eval e -> 
-      fprintf ppf "%a@," print_tt_expr_desc e.exp_desc
+      fprintf ppf "%a@." print_tt_expr_desc e.exp_desc
   | Tstr_value (recflag, list) -> 
-      fprintf ppf "@[<2>(let@ %a@]@ )@])@]@]@," print_patexp list;
-  | Tstr_primitive (_, _, _) -> fprintf ppf "Tprimitive@,"
-  | Tstr_type l ->  List.iter (fprintf ppf "%a@," print_type) l
-  | Tstr_exception (_, _, _) -> fprintf ppf "Texception@,"
-  | Tstr_exn_rebind (_, _, _, _) -> fprintf ppf "Texn_rebind@,"
-  | Tstr_module (_, _, _) -> fprintf ppf "Tmodule@,"
-  | Tstr_recmodule _ -> fprintf ppf "Trecmodule@,"
-  | Tstr_modtype (_, _, _) -> fprintf ppf "Tmodtype@,"
+      fprintf ppf "@[<2>(let@ %a@]@ )@])@]@]@." print_patexp list;
+  | Tstr_primitive (_, _, _) -> fprintf ppf "Tprimitive@."
+  | Tstr_type l ->  List.iter (fprintf ppf "%a@." print_type) l
+  | Tstr_exception (_, _, _) -> fprintf ppf "Texception@."
+  | Tstr_exn_rebind (_, _, _, _) -> fprintf ppf "Texn_rebind@."
+  | Tstr_module (id, _, mod_expr) -> 
+      fprintf ppf "Tstr_module (%a,_,%a)@." Ident.print id print_mod_expr mod_expr
+  | Tstr_recmodule _ -> fprintf ppf "Trecmodule@."
+  | Tstr_modtype (_, _, _) -> fprintf ppf "Tmodtype@."
   | Tstr_open (_, _) -> fprintf ppf "Topen@."
-  | Tstr_class _ -> fprintf ppf "Tclass@,"
-  | Tstr_class_type _ -> fprintf ppf "Tclass_type@,"
-  | Tstr_include (_, _) -> fprintf ppf "Tinclude@,"
+  | Tstr_class _ -> fprintf ppf "Tclass@."
+  | Tstr_class_type _ -> fprintf ppf "Tclass_type@."
+  | Tstr_include (_, _) -> fprintf ppf "Tinclude@."
 
-let rec print_structure_items ppf = function
+and print_structure_items ppf = function
   | [] -> ()
   | x::xs -> 
       print_struct_item_descr ppf x.str_desc;

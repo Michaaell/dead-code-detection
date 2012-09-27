@@ -87,7 +87,7 @@ let print_graph_map ppf =
   DepMap.iter (fun k e ->
     debug "@[ %a : " Printer.print_path k;
     PathSet.iter (fun x -> debug "%a " Printer.print_path x) e;
-    debug "@]"
+    debug "@]@."
   )
 
 (* Function that prints the index *)  

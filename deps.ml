@@ -180,6 +180,13 @@ and calc_index_let index l =
       List.fold_left (fun acc p ->
         incr ind;(!ind-1,p)::acc) index paths) index l
     
+and calc_dep_let_mod dep_list id =
+  let rec aux dep_list = function
+    | [] -> dep_list
+    | (p,e1)::deps_list -> 
+        let new_dep = dep_in_patexp_def_mod id p e1 dep_list in
+        aux new_dep deps_list
+  in aux dep_list
 
 and calc_dep_let dep_list =
   let rec aux dep_list = function
@@ -189,11 +196,31 @@ and calc_dep_let dep_list =
         aux new_dep deps_list
   in aux dep_list
 
-  
 and dep_in_patexp_def p e1 dep_list =
   let rec pat_aux dep_list = function
     | Tpat_any -> calc_dep dep_list path_any e1.exp_desc
     | Tpat_var (id,loc) -> calc_dep dep_list (Path.Pident id) e1.exp_desc
+    | Tpat_alias (p,kind,_) -> pat_aux dep_list p.pat_desc
+    | Tpat_constant cnst -> dep_list
+    | Tpat_tuple pat_list -> 
+        List.fold_left (fun a p ->
+          pat_aux a p.pat_desc) dep_list pat_list
+    | Tpat_construct (path,loc,cnstor_desc,exp_list,_) -> dep_list
+    | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
+    | Tpat_record (list,flag) -> dep_list
+    | Tpat_array pat_list -> dep_list
+    | Tpat_or (pat1,pat2,row_desc_opt) -> failwith "or TODO"
+    | Tpat_lazy pat -> failwith "lazy TODO"
+  in pat_aux dep_list p.pat_desc
+
+and dep_in_patexp_def_mod mod_id p e1 dep_list =
+  let rec pat_aux dep_list = function
+    | Tpat_any -> calc_dep dep_list path_any e1.exp_desc
+    | Tpat_var (id,loc) -> 
+        calc_dep 
+          (add_entry mod_id (Path.Pident id) dep_list) 
+          (Path.Pident id) 
+          e1.exp_desc
     | Tpat_alias (p,kind,_) -> pat_aux dep_list p.pat_desc
     | Tpat_constant cnst -> dep_list
     | Tpat_tuple pat_list -> 
@@ -233,7 +260,21 @@ and dep_in_patexp_case p e1 id dep_list =
     | Tpat_lazy pat -> failwith "lazy TODO"
   in calc_dep (pat_aux id dep_list p.pat_desc) id e1.exp_desc
 
-let calc_struct_item_descr src index type_env primi_env ident_prog deps = function
+let rec calc_dep_module deps_list id_mod mod_desc = match mod_desc.mod_desc with
+  | Tmod_ident (p, _) -> add_entry id_mod p deps_list
+  | Tmod_structure str ->
+      List.fold_left (fun d tstr -> match tstr.str_desc with
+        | Tstr_value (recflag,list) -> calc_dep_let_mod d id_mod list
+        | _ -> d) deps_list str.str_items
+  | Tmod_functor (id, _, _, me) -> 
+      calc_dep_module deps_list id_mod me
+  | Tmod_apply (me1, me2, _) -> 
+      let new_dep = calc_dep_module deps_list id_mod me1 in
+      calc_dep_module new_dep id_mod me2
+  | Tmod_constraint (_, _, _, _) -> deps_list
+  | Tmod_unpack (_, _) -> deps_list
+
+let calc_struct_item_descr index type_env primi_env ident_prog deps = function
   | Tstr_eval e -> (index,type_env,primi_env,calc_dep deps ident_prog e.exp_desc)
   | Tstr_value (recflag,list) -> 
       (calc_index_let index list,type_env,primi_env,calc_dep_let deps list)
@@ -246,9 +287,12 @@ let calc_struct_item_descr src index type_env primi_env ident_prog deps = functi
       (index,type_env,primi_env,deps)
   | Tstr_modtype (_, _, _) -> (index,type_env,primi_env,deps)
   | Tstr_recmodule _ -> (index,type_env,primi_env,deps)
-  | Tstr_module (id, _, _) ->  
+  | Tstr_module (id, _, mod_desc) ->  
       incr ind;
-      ((!ind-1,Path.Pident id)::index,type_env,primi_env,deps)
+      ((!ind-1,Path.Pident id)::index,
+       type_env,
+       primi_env,
+       calc_dep_module deps (Path.Pident id) mod_desc)
   | Tstr_exn_rebind (_, _, _, _) -> failwith "exnreb todo"
   | Tstr_exception (id, _, _) -> 
       incr ind;
@@ -260,7 +304,7 @@ let calc_structure_items src list =
   ident_prog_list := (src,(!ident_prog))::(!ident_prog_list);
   mod_ext := Opcheck.OpenMap.empty;
   List.fold_left (fun (index,type_env,primi_env,dep) x -> 
-    calc_struct_item_descr src index type_env primi_env !ident_prog dep x.str_desc) 
+    calc_struct_item_descr index type_env primi_env !ident_prog dep x.str_desc) 
     ([],[],[],add_entry !ident_prog path_any Utils.DepMap.empty) list
 
 let calc_annot src = function
@@ -284,7 +328,7 @@ let merge_cnst_mli fn cnst primi =
       match p with 
         | Path.Pident var_name -> var_name.Ident.name = n
         | _ -> false) cnst in
-   let is_in_primi_list n =  (* List.exists (fun (_,id) -> id.Ident.name = n) primi in      *)
+   let is_in_primi_list n =
     List.exists (fun (_,p) ->
       match p with
         | Path.Pident var_name -> var_name.Ident.name = n
@@ -297,7 +341,7 @@ let merge_cnst_mli fn cnst primi =
              | _ -> false
          end
      | _ -> false in
-   let get_in_primi_list n =  (* List.find (fun (_,id) -> id.Ident.name = n) primi in *)
+   let get_in_primi_list n = 
     List.find (fun (_,p) ->
       match p with
         | Path.Pident var_name -> var_name.Ident.name = n
@@ -411,12 +455,13 @@ let rec get_cmt_from_modname mn = function
 let rec calc_inter_dep_mod_aux syst mn mn_deps used = function
   | Path.Pdot (p,n,i) as x -> 
       begin
+        (* Utils.debug "@.-> %a <-@." Printer.print_path x; *)
         if (is_mod p !ident_prog_list && i <> -1)
         then
           begin
             let p_cnstr,_,primi_env,_,_,p_deps = (get_deps_cnst (get_name p) syst) in
             let p_mn = get_mod_id p !ident_prog_list in
-            Utils.debug "%a ?: %a @." Printer.print_path mn Printer.print_path x;
+            (* Utils.debug "%a ?: %a @." Printer.print_path mn Printer.print_path x; *)
             let id1 = get_local_id i n p_cnstr primi_env in
             let new_used = add_entry p_mn id1 used in
             calc_inter_dep_mod syst p_mn id1 p_deps new_used
@@ -436,9 +481,12 @@ let rec calc_inter_dep_mod_aux syst mn mn_deps used = function
               (* let new_used = add_entry mn x used in *)
               calc_inter_dep_mod syst mn x mn_deps new_used
             end
-        else
-          let new_used = add_entry mn x used in
-          calc_inter_dep_mod syst mn x mn_deps new_used
+          else
+            if Utils.DepMap.mem p mn_deps
+            then calc_inter_dep_mod syst mn p mn_deps used
+            else
+              let new_used = add_entry mn x used in
+              calc_inter_dep_mod syst mn x mn_deps new_used
       end
   | _ as x ->
       let new_used = add_entry mn x used in
@@ -464,7 +512,7 @@ let calc_inter_live syst =
   let used = 
     List.fold_left (fun used (fn,(cnst,_,_,_,_,d)) ->
       (* Utils.debug "calc inter %s @." fn; *)
-      (* Utils.debug "==\n %a ==\n@." Utils.print_graph_map d; *)
+      Utils.debug "==\n %a ==\n@." Utils.print_graph_map d;
       List.iter (fun (i,x) -> Utils.debug "%i : %a @." i Printer.print_path x) cnst;
       let id = get_from_ident_prog_list fn !ident_prog_list in
       calc_inter_dep_mod syst id id d used) Utils.DepMap.empty syst in
