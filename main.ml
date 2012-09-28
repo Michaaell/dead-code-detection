@@ -73,7 +73,7 @@ let _ =
         iter_dir !dirname;
         let syst =
           List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
-        Utils.debug "@.inter@.";
+        (* Utils.debug "@.inter@."; *)
         let used = Deps.calc_inter_live syst in
         List.iter (fun (fn,(idl,opn,args)) -> 
           ignore (Clean.soft_clean fn idl opn args)) used

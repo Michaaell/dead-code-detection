@@ -381,7 +381,7 @@ let merge_cnst_mli fn cnst primi =
 
 let calc filename  =
   (* try *)
-  Utils.debug "calc %s @." filename;
+  (* Utils.debug "calc %s @." filename; *)
     let infos = Cmt_format.read filename in
     match infos with
       | None, Some cmt_inf ->
@@ -512,8 +512,8 @@ let calc_inter_live syst =
   let used = 
     List.fold_left (fun used (fn,(cnst,_,_,_,_,d)) ->
       (* Utils.debug "calc inter %s @." fn; *)
-      Utils.debug "==\n %a ==\n@." Utils.print_graph_map d;
-      List.iter (fun (i,x) -> Utils.debug "%i : %a @." i Printer.print_path x) cnst;
+      (* Utils.debug "==\n %a ==\n@." Utils.print_graph_map d; *)
+      (* List.iter (fun (i,x) -> Utils.debug "%i : %a @." i Printer.print_path x) cnst; *)
       let id = get_from_ident_prog_list fn !ident_prog_list in
       calc_inter_dep_mod syst id id d used) Utils.DepMap.empty syst in
   List.map (fun (fn,(_,_,_,opn,args,_)) ->
