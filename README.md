@@ -8,6 +8,6 @@
 
 # Compile
 
-Edit Makefile.config
+Edit Makefile
 
     $ make

@@ -39,7 +39,7 @@ let speclist = [
   ("-print", Arg.String (fun s -> filename := s;print_flag := true),
    ": print the typedtree giving the cmt file");
   ("-d", Arg.String (fun s -> dirname := s; test_flag := true),
-   ": detect dead code in source files giving a repositery containing cmt files");
+   ": detect dead code in source files giving a directory containing cmt files");
   ]
 
 let _ =
