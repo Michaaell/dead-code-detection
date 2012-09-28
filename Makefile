@@ -1,6 +1,7 @@
-include Makefile.config
+OCAMLC=ocamlc
 
-LIBS=-I +compiler-libs ocamlcommon.cma -I $(OCAMLBUILDDIR)tools pprintast.cmo untypeast.cmo str.cma
+
+LIBS=-I +compiler-libs ocamlcommon.cma str.cma
 
 
 SOURCES=printer.ml utils.ml opcheck.ml letrec.ml argcheck.ml deps.ml side_effect.ml clean.ml main.ml

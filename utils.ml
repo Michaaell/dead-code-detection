@@ -98,15 +98,6 @@ let rec print_cnst ppf = function
       debug "%i : %a,"  x1  Printer.print_path x2;
       print_cnst ppf xs
 
-(* Function that prints the ast given a .cmt *)
-let print_untype ppf fn = 
-  let aux = function
-    | Implementation strct -> 
-        Pprintast.print_structure ppf (Untypeast.untype_structure strct);
-    | _ -> failwith "Can't print that" in
-  let cmt_inf = Cmt_format.read_cmt fn in
-  aux cmt_inf.cmt_annots
-
 (* Function that extracts the module name given a .cmt *)
 let get_modname filename =
   let cmt_inf = Cmt_format.read_cmt filename in

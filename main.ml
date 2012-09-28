@@ -32,13 +32,13 @@ let rec iter_dir dirname =
 let usage = "usage: " ^ Sys.argv.(0) ^ " [cmt1 cmt2 cmt3 ...] [-elim cmt_file] [-print cmt_file] [-elim-project rep]"
  
 let speclist = [
-  ("-elim", Arg.String (fun s -> cmt_list := parse_arg_list s;elim_flag := true),
-   ": detect dead code in source file giving the cmt files");
+  (* ("-elim", Arg.String (fun s -> cmt_list := parse_arg_list s;elim_flag := true), *)
+  (*  ": detect dead code in source file giving the cmt files"); *)
   ("-short", Arg.Unit (fun () -> Utils.short_flag := true),
    ": print rapport in short version");
   ("-print", Arg.String (fun s -> filename := s;print_flag := true),
    ": print the typedtree giving the cmt file");
-  ("-elim-project", Arg.String (fun s -> dirname := s; test_flag := true),
+  ("-d", Arg.String (fun s -> dirname := s; test_flag := true),
    ": detect dead code in source files giving a repositery containing cmt files");
   ]
 
@@ -73,6 +73,7 @@ let _ =
         iter_dir !dirname;
         let syst =
           List.map (fun x -> (Utils.get_modname x,Deps.calc x)) !cmt_list in
+        Utils.debug "@.inter@.";
         let used = Deps.calc_inter_live syst in
         List.iter (fun (fn,(idl,opn,args)) -> 
           ignore (Clean.soft_clean fn idl opn args)) used
