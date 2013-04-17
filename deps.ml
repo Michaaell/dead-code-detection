@@ -205,7 +205,9 @@ and dep_in_patexp_def p e1 dep_list =
     | Tpat_tuple pat_list -> 
         List.fold_left (fun a p ->
           pat_aux a p.pat_desc) dep_list pat_list
-    | Tpat_construct (path,loc,cnstor_desc,exp_list,_) -> dep_list
+    | Tpat_construct (path,loc,cnstor_desc,pat_list,_) -> 
+        List.fold_left (fun l i -> 
+          (pat_aux l i.pat_desc)) dep_list pat_list
     | Tpat_variant (lbl,pat_option,row_desc) -> failwith "var TODO"
     | Tpat_record (list,flag) -> dep_list
     | Tpat_array pat_list -> dep_list
